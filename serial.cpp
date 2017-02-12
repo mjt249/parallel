@@ -7,6 +7,123 @@
 //
 //  benchmarking program
 //
+
+/************************* Data Structures for Barnes-Hut Tree *************************/
+// Object Quad: Represent a quadrant in domain
+class Quad {
+// Constructor
+    Quad(double, double, double);
+private:
+    double x, y; // x, y coordinate of the lower left point of the square
+    double length; // length of one side of the square
+public:
+// Member functions
+    void copy(Quad q);
+    bool contains(double, double); // function that returns if a point is in quadrant
+    Quad NW();// These four methods create and return a new Quad representing a sub-quadrant of the invoking quadrant.
+
+    Quad NE();
+    Quad SW();
+    Quad SE();
+};
+
+Quad::Quad(double x_in, double y_in, double length_in){
+    x = x_in;
+    y = y_in;
+    length = length_in;
+};
+
+void copy(Quad &q){
+    x = q.x;
+    y = q.y;
+    length = q.length;
+};
+
+bool Quad::contains(double x_q, double y_q){
+    return (x_q >= x) && (x_q <= (x + length)) && (y_q >= y) && (y_q <= y + length);
+};
+
+Quad Quad::NW(){
+    return Quad(x, y+(length/2), length/2);
+};
+
+Quad Quad::NE(){
+    return Quad(x+(length/2), y+(length/2), length/2);
+};
+
+Quad Quad::SW(){
+    return Quad(x, y, length/2);
+};
+
+Quad Quad::SE(){
+    return Quad(x+(length/2), y, length/2);
+};
+
+// Object Body: Represent a body in BHTree
+class Body{
+// Constructor
+    Body(particle_t); // Construct body from particle_t
+    Body(int, double, double); // Construct clusters by providing the attributes
+private:
+    int n_part = 0; // Number of particles in body
+    double px; // x position of cluster or particle
+    double py; // y position of cluster or particle
+    particle_t* p_particle; // pointer to particle (for external node)
+
+// Member function
+public:
+    bool in(Quad); // Function to test if body is in a certain quad domain
+    Body add(Body a, Body b); // Return a new Body that represents the center-of-mass of the two bodies a and b.
+};
+
+Body::Body(particle_t &p){
+    n_part = 1;
+    px = pt.x;
+    py = pt.y;
+    p_particle = &p;
+};
+
+Body::(int n_part_in, double px_in, double py_in){
+    n_part = n_part_in;
+    px = px_in;
+    py = py_in;
+}
+
+bool Body::in(Quad& q){
+    return q.contains(px, py);
+}
+
+Body Body::add(Body a, Body, b){
+    int n_part_new = a.n_part + b.n_part;
+    double px_new = (a.n_part * a.px + b.n_part * b.px ) / n_part_new;
+    double py_new = (a.n_part * a.py + b.n_part * b.py ) / n_part_new;
+    return Body(n_part_new, px_new, py_new);
+}
+
+// Object BHTree: Barnes-Hut tree structure
+class BHTree{
+// Constructor
+    BHTree(Quad); // create a Barnes-Hut tree with no bodies, representing the given quadrant.
+private:
+    Body body; // body or aggregate body stored in this node
+    Quad quad; // square region that the tree represents
+    BHTree* NW; // tree representing northwest quadrant
+    BHTree* NE; // tree representing northeast quadrant
+    BHTree* SW; // tree representing southwest quadrant
+    BHTree* SE; // tree representing southeast quadrant
+    
+public:
+    void insert(Body); // add the body to the involking Barnes-Hut tree
+    void totalForce(particle_t*); // apply force on particle from all bodies in the invoking Barnes-Hut tree
+};
+
+BHTree::BHTree(Quad &q){
+    quad.copy(q);
+}
+
+
+
+
 int main( int argc, char **argv )
 {    
     int navg,nabsavg=0;
