@@ -4,21 +4,21 @@
 #include <math.h>
 #include "common.h"
 
+#define DELTA 0.5
 //
 //  benchmarking program
 //
 
-/************************* Data Structures for Barnes-Hut Tree *************************/
+/*********************************** Data Structures for Barnes-Hut Tree ***********************************/
+/* ---------------------Class and function declarations--------------------- */
 // Object Quad: Represent a quadrant in domain
 class Quad {
-// Constructor
-    Quad(double, double, double);
-private:
+public:
     double x, y; // x, y coordinate of the lower left point of the square
     double length; // length of one side of the square
-public:
+// Constructor
+    Quad(double, double, double);
 // Member functions
-    void copy(Quad q);
     bool contains(double, double); // function that returns if a point is in quadrant
     Quad NW();// These four methods create and return a new Quad representing a sub-quadrant of the invoking quadrant.
 
@@ -26,104 +26,170 @@ public:
     Quad SW();
     Quad SE();
 };
-
+// Object Body: Represent a body in BHTree
+class Body{
+public:
+    int n_part = 0; // Number of particles in body
+    double px; // x position of cluster or particle
+    double py; // y position of cluster or particle
+    particle_t* p_particle = nullptr; // pointer to particle (for external node)
+    
+    // Member function
+    // Constructor
+    Body(particle_t); // Construct body from particle_t
+    Body(int, double, double); // Construct clusters by providing the attributes
+    bool in(const Quad &); // Function to test if body is in a certain quad domain
+};
+// Object BHTree: Barnes-Hut tree structure
+class BHTree{
+private:
+    Body* body = nullptr; // body or aggregate body stored in this node
+    Quad* quad = nullptr; // square region that the tree represents
+    BHTree* NW = nullptr; // tree representing northwest quadrant
+    BHTree* NE = nullptr; // tree representing northeast quadrant
+    BHTree* SW = nullptr; // tree representing southwest quadrant
+    BHTree* SE = nullptr; // tree representing southeast quadrant
+    void fork(); // fork into 4 child nodes
+    void insertChild(Body);
+public:
+    // Constructor
+    BHTree(Quad); // create a Barnes-Hut tree with no bodies, representing the given quadrant.
+    ~BHTree(){
+        delete body;
+        delete quad;
+        delete NW;
+        delete NE;
+        delete SW;
+        delete SE;
+    };
+    void insert(Body); // add the body to the involking Barnes-Hut tree
+    void totalForce(particle_t*); // apply force on particle from all bodies in the invoking Barnes-Hut tree
+};
+// Auxilliary Functions
+addBody(const Body & a, const Body & b);
+BHTree* buildTree(int n, particle_t* particles);
+/* ---------------------Function Implementations--------------------- */
+/* Implementations for Quad */
 Quad::Quad(double x_in, double y_in, double length_in){
     x = x_in;
     y = y_in;
     length = length_in;
 };
-
-void copy(Quad &q){
-    x = q.x;
-    y = q.y;
-    length = q.length;
-};
-
 bool Quad::contains(double x_q, double y_q){
     return (x_q >= x) && (x_q <= (x + length)) && (y_q >= y) && (y_q <= y + length);
 };
-
 Quad Quad::NW(){
     return Quad(x, y+(length/2), length/2);
 };
-
 Quad Quad::NE(){
     return Quad(x+(length/2), y+(length/2), length/2);
 };
-
 Quad Quad::SW(){
     return Quad(x, y, length/2);
 };
-
 Quad Quad::SE(){
     return Quad(x+(length/2), y, length/2);
 };
-
-// Object Body: Represent a body in BHTree
-class Body{
-// Constructor
-    Body(particle_t); // Construct body from particle_t
-    Body(int, double, double); // Construct clusters by providing the attributes
-private:
-    int n_part = 0; // Number of particles in body
-    double px; // x position of cluster or particle
-    double py; // y position of cluster or particle
-    particle_t* p_particle; // pointer to particle (for external node)
-
-// Member function
-public:
-    bool in(Quad); // Function to test if body is in a certain quad domain
-    Body add(Body a, Body b); // Return a new Body that represents the center-of-mass of the two bodies a and b.
-};
-
+/* Implementations for Body */
 Body::Body(particle_t &p){
     n_part = 1;
     px = pt.x;
     py = pt.y;
     p_particle = &p;
 };
-
 Body::(int n_part_in, double px_in, double py_in){
     n_part = n_part_in;
     px = px_in;
     py = py_in;
-}
-
-bool Body::in(Quad& q){
+};
+bool Body::in(const Quad & q){
     return q.contains(px, py);
-}
-
-Body Body::add(Body a, Body, b){
+};
+/* Implementation for BHTree */
+BHTree::BHTree(Quad &q){
+    quad = &q;
+};
+void BHTree::fork(){
+    NW = new BHTree(quad->NW());
+    NE = new BHTree(quad->NE());
+    SW = new BHTree(quad->SW());
+    SE = new BHTree(quad->SE());
+};
+void BHTree::insertChild(Body &b){    // insert body into a child node
+    if (b.in(*(NW->quad)))
+    *NW.insert(b);
+    else if (b.in(*(NE->quad)))
+    *NE.insert(b);
+    else if (b.in(*(SW->quad)))
+    *SW.insert(b);
+    else if (b.in(*(SE->quad)))
+    *SE.insert(b);
+    else
+    perror("Could not locate a quadrant for body.");
+};
+void BHTree::insert(Body & b){
+    if (body == nullptr){ // empty node
+        body = &b;
+    }
+    else if (body->n_part > 1){ // internal node
+        // update center of mass
+        body->px = (body->px * body->n_part + b.px * b.n_part) / (body->n_part+b.n_part);
+        body->py = (body->py * body->n_part + b.py * b.n_part) / (body->n_part+b.n_part);
+        body->n_part += b.n_part;
+        // insert body into a child node
+        insertChild(b);
+    }
+    else if (body->n_part == 1){ // external node
+        // create new combined body
+        Body new_body = addBody(*body, b);
+        // fork this node
+        fork();
+        // insert body into a child node
+        insertChild(body);
+        insertChild(b);
+    }
+    else {
+        perror("Error while inserting body into BHTree.");
+    }
+};
+void totalForce(particle_t* ptc){
+    if (body->n_part > 1){ // internal node
+        // check distance
+        double dx = body->px - ptc->x;
+        double dy = body->py - ptc->y;
+        double r = sqrt(dx * dx + dy * dy);
+        if (r - 1.414*(quad->length) < cutoff){ // not entire cluster beyond cutoff
+            *NW.totalForce(ptc);
+            *NE.totalForce(ptc);
+            *SW.totalForce(ptc);
+            *SE.totalForce(ptc);
+        };
+    }
+    else if (body->n_part == 1){ // external node
+        apply_force(*ptc, *(body->p_particle), &dmin, &davg, &navg);
+    }
+};
+/* Auxilliary Function Implementations */
+Body addBody(const Body & a, const Body & b){ // Return a new Body that represents the center-of-mass of the two bodies a and b.
     int n_part_new = a.n_part + b.n_part;
     double px_new = (a.n_part * a.px + b.n_part * b.px ) / n_part_new;
     double py_new = (a.n_part * a.py + b.n_part * b.py ) / n_part_new;
     return Body(n_part_new, px_new, py_new);
-}
-
-// Object BHTree: Barnes-Hut tree structure
-class BHTree{
-// Constructor
-    BHTree(Quad); // create a Barnes-Hut tree with no bodies, representing the given quadrant.
-private:
-    Body body; // body or aggregate body stored in this node
-    Quad quad; // square region that the tree represents
-    BHTree* NW; // tree representing northwest quadrant
-    BHTree* NE; // tree representing northeast quadrant
-    BHTree* SW; // tree representing southwest quadrant
-    BHTree* SE; // tree representing southeast quadrant
-    
-public:
-    void insert(Body); // add the body to the involking Barnes-Hut tree
-    void totalForce(particle_t*); // apply force on particle from all bodies in the invoking Barnes-Hut tree
+};
+BHTree* buildTree(int n, particle_t* particles){
+    // build root node
+    Quad quad_root = Quad(0, 0, size);
+    BHTree* Tp = new BHTree(quad_root);
+    // insert particles into the root
+    for (int i = 0; i < n; i++){
+        // pack particle into body
+        Body* b = new Body(particles[i]);
+        Tp->insert(*b);
+    };
+    return Tp;
 };
 
-BHTree::BHTree(Quad &q){
-    quad.copy(q);
-}
-
-
-
-
+/* Main Function */
 int main( int argc, char **argv )
 {    
     int navg,nabsavg=0;
@@ -160,17 +226,18 @@ int main( int argc, char **argv )
     for( int step = 0; step < NSTEPS; step++ )
     {
 	navg = 0;
-        davg = 0.0;
+    davg = 0.0;
 	dmin = 1.0;
         //
         //  compute forces
         //
+        BHTree* tree_ptr = buildTree(n, particles); // build tree
         for( int i = 0; i < n; i++ )
         {
             particles[i].ax = particles[i].ay = 0;
-            for (int j = 0; j < n; j++ )
-				apply_force( particles[i], particles[j],&dmin,&davg,&navg);
-        }
+            tree_ptr->totalForce(particles[i]);
+        };
+        delete tree; // chop tree
  
         //
         //  move particles
