@@ -67,7 +67,7 @@ public:
         delete SE;
     };
     void insert(Body &); // add the body to the involking Barnes-Hut tree
-    void totalForce(particle_t*); // apply force on particle from all bodies in the invoking Barnes-Hut tree
+    void totalForce(particle_t*, double dmin, double davg, int navg); // apply force on particle from all bodies in the invoking Barnes-Hut tree
 };
 // Auxilliary Functions
 Body addBody(const Body &, const Body &);
@@ -164,10 +164,10 @@ void BHTree::totalForce(particle_t* ptc, double dmin, double davg, int navg){
         double dy = body->py - ptc->y;
         double r = sqrt(dx * dx + dy * dy);
         if (r - 1.414*(quad->length) < cutoff){ // not entire cluster beyond cutoff
-            NW->totalForce(ptc);
-            NE->totalForce(ptc);
-            SW->totalForce(ptc);
-            SE->totalForce(ptc);
+            NW->totalForce(ptc, dmin, davg, navg);
+            NE->totalForce(ptc, dmin, davg, navg);
+            SW->totalForce(ptc, dmin, davg, navg);
+            SE->totalForce(ptc, dmin, davg, navg);
         };
     }
     else if (body->n_part == 1){ // external node
