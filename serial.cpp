@@ -13,7 +13,6 @@
 #define min_r   (cutoff/100)
 #define dt      0.0005
 
-// define size
 double SIZE;
 //
 //  benchmarking program
@@ -30,11 +29,6 @@ public:
     Quad(double, double, double);
 // Member functions
     bool contains(double, double); // function that returns if a point is in quadrant
-    Quad NW();// These four methods create and return a new Quad representing a sub-quadrant of the invoking quadrant.
-
-    Quad NE();
-    Quad SW();
-    Quad SE();
 };
 // Object Body: Represent a body in BHTree
 class Body{
@@ -63,7 +57,7 @@ private:
     void insertChild(Body &);
 public:
     // Constructor
-    BHTree(Quad &); // create a Barnes-Hut tree with no bodies, representing the given quadrant.
+    BHTree(Quad *); // create a Barnes-Hut tree with no bodies, representing the given quadrant.
     ~BHTree(){
         delete body;
         delete quad;
@@ -77,7 +71,7 @@ public:
 };
 // Auxilliary Functions
 Body addBody(const Body &, const Body &);
-BHTree* buildTree(int, particle_t*, double);
+BHTree* buildTree(int n, particle_t* particles);
 /* ---------------------Function Implementations--------------------- */
 /* Implementations for Quad */
 Quad::Quad(double x_in, double y_in, double length_in){
@@ -87,18 +81,6 @@ Quad::Quad(double x_in, double y_in, double length_in){
 };
 bool Quad::contains(double x_q, double y_q){
     return (x_q >= x) && (x_q <= (x + length)) && (y_q >= y) && (y_q <= y + length);
-};
-Quad Quad::NW(){
-    return Quad(x, y+(length/2), length/2);
-};
-Quad Quad::NE(){
-    return Quad(x+(length/2), y+(length/2), length/2);
-};
-Quad Quad::SW(){
-    return Quad(x, y, length/2);
-};
-Quad Quad::SE(){
-    return Quad(x+(length/2), y, length/2);
 };
 /* Implementations for Body */
 Body::Body(particle_t &p){
@@ -116,27 +98,37 @@ bool Body::in(Quad & q){
     return q.contains(px, py);
 };
 /* Implementation for BHTree */
-BHTree::BHTree(Quad &q){
-    quad = &q;
+BHTree::BHTree(Quad* q){
+    quad = q;
+    body = nullptr;
+    NW = nullptr;
+    NE = nullptr;
+    SW = nullptr;
+    SE = nullptr;
 };
 void BHTree::fork(){
-    Quad q1 = quad->NW();
-    Quad q2 = quad->NE();
-    Quad q3 = quad->SW();
-    Quad q4 = quad->SE();
+    double hl = (quad->length)/2;
+    Quad* q1 = new Quad(quad->x, (quad->y)+hl, hl);
+    Quad* q2 = new Quad(quad->x + hl, quad->y + hl, hl);
+    Quad* q3 = new Quad(quad->x, quad->y, hl);
+    Quad* q4 = new Quad(quad->x + hl, quad->y, hl);
     NW = new BHTree(q1);
     NE = new BHTree(q2);
     SW = new BHTree(q3);
     SE = new BHTree(q4);
 };
 void BHTree::insertChild(Body &b){    // insert body into a child node
-    if (b.in(*(NW->quad)))
+    Quad q1 = *(NW->quad);
+    Quad q2 = *(NE->quad);
+    Quad q3 = *(SW->quad);
+    Quad q4 = *(SE->quad);
+    if (b.in(q1))
     NW->insert(b);
-    else if (b.in(*(NE->quad)))
+    else if (b.in(q2))
     NE->insert(b);
-    else if (b.in(*(SW->quad)))
+    else if (b.in(q3))
     SW->insert(b);
-    else if (b.in(*(SE->quad)))
+    else if (b.in(q4))
     SE->insert(b);
     else
     perror("Could not locate a quadrant for body.");
@@ -193,7 +185,7 @@ Body addBody(const Body & a, const Body & b){ // Return a new Body that represen
 BHTree* buildTree(int n, particle_t* particles, double SIZE){
     // build root node
     Quad quad_root = Quad(0, 0, SIZE);
-    BHTree* Tp = new BHTree(quad_root);
+    BHTree* Tp = new BHTree(&quad_root);
     // insert particles into the root
     for (int i = 0; i < n; i++){
         // pack particle into body
@@ -231,8 +223,8 @@ int main( int argc, char **argv )
     particle_t *particles = (particle_t*) malloc( n * sizeof(particle_t) );
     set_size( n );
     init_particles( n, particles );
-    SIZE = sqrt(density * n);    
-
+    SIZE = sqrt(density * n);
+    
     //
     //  simulate a number of time steps
     //
@@ -252,7 +244,7 @@ int main( int argc, char **argv )
             particles[i].ax = particles[i].ay = 0;
             tree_ptr->totalForce(&particles[i], dmin, davg, navg);
         };
-        delete tree_ptr; // chop tree
+//        delete tree_ptr; // chop tree
  
         //
         //  move particles
