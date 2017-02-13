@@ -6,6 +6,15 @@
 
 #define DELTA 0.5
 #define nullptr NULL
+
+#define density 0.0005
+#define mass    0.01
+#define cutoff  0.01
+#define min_r   (cutoff/100)
+#define dt      0.0005
+
+// define size
+double SIZE;
 //
 //  benchmarking program
 //
@@ -64,11 +73,11 @@ public:
         delete SE;
     };
     void insert(Body &); // add the body to the involking Barnes-Hut tree
-    void totalForce(particle_t*); // apply force on particle from all bodies in the invoking Barnes-Hut tree
+    void totalForce(particle_t*, double dmin, double davg, int navg); // apply force on particle from all bodies in the invoking Barnes-Hut tree
 };
 // Auxilliary Functions
 Body addBody(const Body &, const Body &);
-BHTree* buildTree(int n, particle_t* particles);
+BHTree* buildTree(int, particle_t*, double);
 /* ---------------------Function Implementations--------------------- */
 /* Implementations for Quad */
 Quad::Quad(double x_in, double y_in, double length_in){
@@ -157,17 +166,17 @@ void BHTree::insert(Body & b){
         perror("Error while inserting body into BHTree.");
     }
 };
-void BHTree::totalForce(particle_t* ptc){
+void BHTree::totalForce(particle_t* ptc, double dmin, double davg, int navg){
     if (body->n_part > 1){ // internal node
         // check distance
         double dx = body->px - ptc->x;
         double dy = body->py - ptc->y;
         double r = sqrt(dx * dx + dy * dy);
         if (r - 1.414*(quad->length) < cutoff){ // not entire cluster beyond cutoff
-            NW->totalForce(ptc);
-            NE->totalForce(ptc);
-            SW->totalForce(ptc);
-            SE->totalForce(ptc);
+            NW->totalForce(ptc, dmin, davg, navg);
+            NE->totalForce(ptc, dmin, davg, navg);
+            SW->totalForce(ptc, dmin, davg, navg);
+            SE->totalForce(ptc, dmin, davg, navg);
         };
     }
     else if (body->n_part == 1){ // external node
@@ -181,9 +190,9 @@ Body addBody(const Body & a, const Body & b){ // Return a new Body that represen
     double py_new = (a.n_part * a.py + b.n_part * b.py ) / n_part_new;
     return Body(n_part_new, px_new, py_new);
 };
-BHTree* buildTree(int n, particle_t* particles){
+BHTree* buildTree(int n, particle_t* particles, double SIZE){
     // build root node
-    Quad quad_root = Quad(0, 0, size);
+    Quad quad_root = Quad(0, 0, SIZE);
     BHTree* Tp = new BHTree(quad_root);
     // insert particles into the root
     for (int i = 0; i < n; i++){
@@ -222,7 +231,8 @@ int main( int argc, char **argv )
     particle_t *particles = (particle_t*) malloc( n * sizeof(particle_t) );
     set_size( n );
     init_particles( n, particles );
-    
+    SIZE = sqrt(density * n);    
+
     //
     //  simulate a number of time steps
     //
@@ -236,11 +246,11 @@ int main( int argc, char **argv )
         //
         //  compute forces
         //
-        BHTree* tree_ptr = buildTree(n, particles); // build tree
+        BHTree* tree_ptr = buildTree(n, particles, SIZE); // build tree
         for( int i = 0; i < n; i++ )
         {
             particles[i].ax = particles[i].ay = 0;
-            tree_ptr->totalForce(&particles[i]);
+            tree_ptr->totalForce(&particles[i], dmin, davg, navg);
         };
         delete tree_ptr; // chop tree
  
