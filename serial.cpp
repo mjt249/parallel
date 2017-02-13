@@ -67,10 +67,10 @@ public:
         delete SE;
     };
     void insert(Body &); // add the body to the involking Barnes-Hut tree
-    void totalForce(particle_t*, double dmin, double davg, int navg); // apply force on particle from all bodies in the invoking Barnes-Hut tree
+    void totalForce(particle_t*, double *, double *, int *); // apply force on particle from all bodies in the invoking Barnes-Hut tree
 };
 // Auxilliary Functions
-Body addBody(const Body &, const Body &);
+Body* addBody(const Body &, const Body &);
 BHTree* buildTree(int n, particle_t* particles);
 /* ---------------------Function Implementations--------------------- */
 /* Implementations for Quad */
@@ -147,19 +147,22 @@ void BHTree::insert(Body & b){
     }
     else if (body->n_part == 1){ // external node
         // create new combined body
-        Body new_body = addBody(*body, b);
+        Body* new_body = addBody(*body, b);
         // fork this node
         fork();
         // insert body into a child node
         insertChild(*body);
         insertChild(b);
+        body = new_body;
     }
     else {
         perror("Error while inserting body into BHTree.");
     }
 };
-void BHTree::totalForce(particle_t* ptc, double dmin, double davg, int navg){
-    if (body->n_part > 1){ // internal node
+void BHTree::totalForce(particle_t* ptc, double * dmin, double * davg, int * navg){
+    if (body == nullptr){ // empty node
+    }
+    else if (body->n_part > 1){ // internal node
         // check distance
         double dx = body->px - ptc->x;
         double dy = body->py - ptc->y;
@@ -172,20 +175,21 @@ void BHTree::totalForce(particle_t* ptc, double dmin, double davg, int navg){
         };
     }
     else if (body->n_part == 1){ // external node
-        apply_force(*ptc, *(body->p_particle), &dmin, &davg, &navg);
+        apply_force(*ptc, *(body->p_particle), dmin, davg, navg);
     }
 };
 /* Auxilliary Function Implementations */
-Body addBody(const Body & a, const Body & b){ // Return a new Body that represents the center-of-mass of the two bodies a and b.
+Body* addBody(const Body & a, const Body & b){ // Return a new Body that represents the center-of-mass of the two bodies a and b.
     int n_part_new = a.n_part + b.n_part;
     double px_new = (a.n_part * a.px + b.n_part * b.px ) / n_part_new;
     double py_new = (a.n_part * a.py + b.n_part * b.py ) / n_part_new;
-    return Body(n_part_new, px_new, py_new);
+    Body * bp = new Body(n_part_new, px_new, py_new);
+    return bp;
 };
 BHTree* buildTree(int n, particle_t* particles, double SIZE){
     // build root node
-    Quad quad_root = Quad(0, 0, SIZE);
-    BHTree* Tp = new BHTree(&quad_root);
+    Quad * quad_root = new Quad(0, 0, SIZE);
+    BHTree* Tp = new BHTree(quad_root);
     // insert particles into the root
     for (int i = 0; i < n; i++){
         // pack particle into body
@@ -242,7 +246,7 @@ int main( int argc, char **argv )
         for( int i = 0; i < n; i++ )
         {
             particles[i].ax = particles[i].ay = 0;
-            tree_ptr->totalForce(&particles[i], dmin, davg, navg);
+            tree_ptr->totalForce(&particles[i], &dmin, &davg, &navg);
         };
 //        delete tree_ptr; // chop tree
  
