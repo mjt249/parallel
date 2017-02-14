@@ -18,7 +18,7 @@ double SIZE;
 //  benchmarking program
 //
 
-/*********************************** Data Structures for Barnes-Hut Tree ***********************************/
+/******************** Data Structures for Barnes-Hut Tree ********************/
 /* ---------------------Class and function declarations--------------------- */
 // Object Quad: Represent a quadrant in domain
 class Quad {
@@ -28,8 +28,9 @@ public:
 // Constructor
     Quad(double, double, double);
 // Member functions
-    bool contains(double, double); // function that returns if a point is in quadrant
+    bool contains(double, double); // returns whether a point is in quadrant
 };
+
 // Object Body: Represent a body in BHTree
 class Body{
 public:
@@ -37,13 +38,14 @@ public:
     double px; // x position of cluster or particle
     double py; // y position of cluster or particle
     particle_t* p_particle; // pointer to particle (for external node)
-    
+
     // Member function
     // Constructor
     Body(particle_t &); // Construct body from particle_t
     Body(int, double, double); // Construct clusters by providing the attributes
     bool in(Quad &); // Function to test if body is in a certain quad domain
 };
+
 // Object BHTree: Barnes-Hut tree structure
 class BHTree{
 private:
@@ -55,9 +57,11 @@ private:
     BHTree* SE; // tree representing southeast quadrant
     void fork(); // fork into 4 child nodes
     void insertChild(Body &);
+
 public:
     // Constructor
-    BHTree(Quad *); // create a Barnes-Hut tree with no bodies, representing the given quadrant.
+    BHTree(Quad *); // create a Barnes-Hut tree with no bodies, representing
+                    // the given quadrant.
     ~BHTree(){
         delete body;
         delete quad;
@@ -67,8 +71,13 @@ public:
         delete SE;
     };
     void insert(Body &); // add the body to the involking Barnes-Hut tree
-    void totalForce(particle_t*, double *, double *, int *); // apply force on particle from all bodies in the invoking Barnes-Hut tree
+    void totalForce(particle_t*, double *, double *, int *); // apply force on
+                                                             // particle from
+                                                             // all bodies in
+                                                             // the invoking
+                                                             // Barnes-Hut tree
 };
+
 // Auxilliary Functions
 Body* addBody(const Body &, const Body &);
 BHTree* buildTree(int n, particle_t* particles);
@@ -79,9 +88,12 @@ Quad::Quad(double x_in, double y_in, double length_in){
     y = y_in;
     length = length_in;
 };
+
 bool Quad::contains(double x_q, double y_q){
-    return (x_q >= x) && (x_q <= (x + length)) && (y_q >= y) && (y_q <= y + length);
+    return (x_q >= x) && (x_q <= (x + length)) &&
+        (y_q >= y) && (y_q <= y + length);
 };
+
 /* Implementations for Body */
 Body::Body(particle_t &p){
     n_part = 1;
@@ -89,14 +101,17 @@ Body::Body(particle_t &p){
     py = p.y;
     p_particle = &p;
 };
+
 Body::Body(int n_part_in, double px_in, double py_in){
     n_part = n_part_in;
     px = px_in;
     py = py_in;
 };
+
 bool Body::in(Quad & q){
     return q.contains(px, py);
 };
+
 /* Implementation for BHTree */
 BHTree::BHTree(Quad* q){
     quad = q;
@@ -106,6 +121,7 @@ BHTree::BHTree(Quad* q){
     SW = nullptr;
     SE = nullptr;
 };
+
 void BHTree::fork(){
     double hl = (quad->length)/2;
     Quad* q1 = new Quad(quad->x, (quad->y)+hl, hl);
@@ -117,6 +133,7 @@ void BHTree::fork(){
     SW = new BHTree(q3);
     SE = new BHTree(q4);
 };
+
 void BHTree::insertChild(Body &b){    // insert body into a child node
     Quad q1 = *(NW->quad);
     Quad q2 = *(NE->quad);
@@ -133,14 +150,17 @@ void BHTree::insertChild(Body &b){    // insert body into a child node
     else
     perror("Could not locate a quadrant for body.");
 };
+
 void BHTree::insert(Body & b){
     if (body == nullptr){ // empty node
         body = &b;
     }
     else if (body->n_part > 1){ // internal node
         // update center of mass
-        body->px = (body->px * body->n_part + b.px * b.n_part) / (body->n_part+b.n_part);
-        body->py = (body->py * body->n_part + b.py * b.n_part) / (body->n_part+b.n_part);
+        body->px = (body->px * body->n_part + b.px * b.n_part)
+            / (body->n_part+b.n_part);
+        body->py = (body->py * body->n_part + b.py * b.n_part)
+            / (body->n_part+b.n_part);
         body->n_part += b.n_part;
         // insert body into a child node
         insertChild(b);
@@ -159,7 +179,8 @@ void BHTree::insert(Body & b){
         perror("Error while inserting body into BHTree.");
     }
 };
-void BHTree::totalForce(particle_t* ptc, double * dmin, double * davg, int * navg){
+
+void BHTree::totalForce(particle_t* ptc, double* dmin, double* davg, int* navg){
     if (body == nullptr){ // empty node
     }
     else if (body->n_part > 1){ // internal node
@@ -167,7 +188,8 @@ void BHTree::totalForce(particle_t* ptc, double * dmin, double * davg, int * nav
         double dx = body->px - ptc->x;
         double dy = body->py - ptc->y;
         double r = sqrt(dx * dx + dy * dy);
-        if (r - 1.414*(quad->length) < cutoff){ // not entire cluster beyond cutoff
+        if (r - 1.414*(quad->length) < cutoff){ // not entire cluster beyond
+                                                // cutoff
             NW->totalForce(ptc, dmin, davg, navg);
             NE->totalForce(ptc, dmin, davg, navg);
             SW->totalForce(ptc, dmin, davg, navg);
@@ -178,14 +200,18 @@ void BHTree::totalForce(particle_t* ptc, double * dmin, double * davg, int * nav
         apply_force(*ptc, *(body->p_particle), dmin, davg, navg);
     }
 };
+
 /* Auxilliary Function Implementations */
-Body* addBody(const Body & a, const Body & b){ // Return a new Body that represents the center-of-mass of the two bodies a and b.
+Body* addBody(const Body & a, const Body & b){
+    // Return a new Body that represents the center-of-mass
+    // of the two bodies a and b.
     int n_part_new = a.n_part + b.n_part;
     double px_new = (a.n_part * a.px + b.n_part * b.px ) / n_part_new;
     double py_new = (a.n_part * a.py + b.n_part * b.py ) / n_part_new;
     Body * bp = new Body(n_part_new, px_new, py_new);
     return bp;
 };
+
 BHTree* buildTree(int n, particle_t* particles, double SIZE){
     // build root node
     Quad * quad_root = new Quad(0, 0, SIZE);
@@ -201,7 +227,7 @@ BHTree* buildTree(int n, particle_t* particles, double SIZE){
 
 /* Main Function */
 int main( int argc, char **argv )
-{    
+{
     int navg,nabsavg=0;
     double davg,dmin, absmin=1.0, absavg=0.0;
 
@@ -215,12 +241,12 @@ int main( int argc, char **argv )
         printf( "-no turns off all correctness checks and particle output\n");
         return 0;
     }
-    
+
     int n = read_int( argc, argv, "-n", 1000 );
 
     char *savename = read_string( argc, argv, "-o", NULL );
     char *sumname = read_string( argc, argv, "-s", NULL );
-    
+
     FILE *fsave = savename ? fopen( savename, "w" ) : NULL;
     FILE *fsum = sumname ? fopen ( sumname, "a" ) : NULL;
 
@@ -228,12 +254,12 @@ int main( int argc, char **argv )
     set_size( n );
     init_particles( n, particles );
     SIZE = sqrt(density * n);
-    
+
     //
     //  simulate a number of time steps
     //
     double simulation_time = read_timer( );
-	
+
     for( int step = 0; step < NSTEPS; step++ )
     {
 	navg = 0;
@@ -249,12 +275,12 @@ int main( int argc, char **argv )
             tree_ptr->totalForce(&particles[i], &dmin, &davg, &navg);
         };
 //        delete tree_ptr; // chop tree
- 
+
         //
         //  move particles
         //
-        for( int i = 0; i < n; i++ ) 
-            move( particles[i] );		
+        for( int i = 0; i < n; i++ )
+            move( particles[i] );
 
         if( find_option( argc, argv, "-no" ) == -1 )
         {
@@ -266,7 +292,7 @@ int main( int argc, char **argv )
             nabsavg++;
           }
           if (dmin < absmin) absmin = dmin;
-		
+
           //
           //  save if necessary
           //
@@ -275,39 +301,45 @@ int main( int argc, char **argv )
         }
     }
     simulation_time = read_timer( ) - simulation_time;
-    
+
     printf( "n = %d, simulation time = %g seconds", n, simulation_time);
 
     if( find_option( argc, argv, "-no" ) == -1 )
     {
       if (nabsavg) absavg /= nabsavg;
-    // 
-    //  -The minimum distance absmin between 2 particles during the run of the simulation
-    //  -A Correct simulation will have particles stay at greater than 0.4 (of cutoff) with typical values between .7-.8
-    //  -A simulation where particles don't interact correctly will be less than 0.4 (of cutoff) with typical values between .01-.05
     //
-    //  -The average distance absavg is ~.95 when most particles are interacting correctly and ~.66 when no particles are interacting
+    //  -The minimum distance absmin between 2 particles during the run of the
+    //   simulation
+    //  -A Correct simulation will have particles stay at greater than 0.4 (of
+    //   cutoff) with typical values between .7-.8
+    //  -A simulation where particles don't interact correctly will be less than
+    //   0.4 (of cutoff) with typical values between .01-.05
+    //
+    //  -The average distance absavg is ~.95 when most particles are interacting
+    //   correctly and ~.66 when no particles are interacting
     //
     printf( ", absmin = %lf, absavg = %lf", absmin, absavg);
-    if (absmin < 0.4) printf ("\nThe minimum distance is below 0.4 meaning that some particle is not interacting");
-    if (absavg < 0.8) printf ("\nThe average distance is below 0.8 meaning that most particles are not interacting");
+    if (absmin < 0.4) printf ("\nThe minimum distance is below 0.4 meaning that\
+             some particle is not interacting");
+    if (absavg < 0.8) printf ("\nThe average distance is below 0.8 meaning that\
+             most particles are not interacting");
     }
-    printf("\n");     
+    printf("\n");
 
     //
     // Printing summary data
     //
-    if( fsum) 
+    if( fsum)
         fprintf(fsum,"%d %g\n",n,simulation_time);
- 
+
     //
     // Clearing space
     //
     if( fsum )
-        fclose( fsum );    
+        fclose( fsum );
     free( particles );
     if( fsave )
         fclose( fsave );
-    
+
     return 0;
 }
