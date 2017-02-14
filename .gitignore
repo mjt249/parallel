@@ -1,0 +1,6 @@
+serial
+openmp
+mpi
+autograder
+*.o
+*~
