@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <math.h>
 #include "common.h"
+#include <vector>
+#include <iostream>
 
 //
 //  benchmarking program
@@ -48,18 +50,98 @@ int main( int argc, char **argv )
         //
         //  compute forces
         //
-        for( int i = 0; i < n; i++ )
+//        for( int i = 0; i < n; i++ )
+//        {
+//            particles[i].ax = particles[i].ay = 0;
+//            for (int j = 0; j < n; j++ )
+//				apply_force( particles[i], particles[j],&dmin,&davg,&navg);
+//
+//
+// ________________________________________________________________________________
+
+        // John's TODO!
+        // TODO: Make sure the total number of points in the bins equals N
+
+        double density = .0005;
+        double size = sqrt( density * n );
+
+        // Create Bins as a cell_num by cell_num matrix of Vectors
+        int cell_num = 16;
+        std::vector<particle_t*> bins[cell_num][cell_num];
+        for (int i = 0; i < cell_num; i++)
         {
-            particles[i].ax = particles[i].ay = 0;
-            for (int j = 0; j < n; j++ )
-				apply_force( particles[i], particles[j],&dmin,&davg,&navg);
+            for (int j = 0; j < cell_num; j++) {
+                bins[i][j] = std::vector<particle_t*>();
+            }
         }
- 
+        double cell_size = size / cell_num;
+
+        // Fill matrix with particles
+        for (int i = 0; i < n; i++)
+        {
+            double current_x = particles[i].x;
+            int bin_x = floor(current_x / cell_size);
+
+            double current_y = particles[i].y;
+            int bin_y = floor(current_y / cell_size);
+
+            bins[bin_y][bin_x].push_back(&particles[i]);
+        }
+
+        // Compute forces
+
+        int nnn = 0;
+
+        for (int current_row = 0; current_row < cell_num; current_row++)
+        {
+            for (int current_col = 0; current_col < cell_num; current_col++)
+            {
+                //Add current bin and neighboring bins to close_bins
+                std::vector<std::vector<particle_t*> > close_bins;
+
+                //Add neighbors
+                for (int i = current_row - 1; i <= current_row + 1; i++) {
+                    for (int j = current_col - 1; j <= current_col + 1; j++) {
+                        if (i >= 0 && i < cell_num && j >= 0 && j < cell_num) {
+                            close_bins.push_back(bins[i][j]);
+                        }
+                    }
+                }
+
+                //Find forces for each particle in bins[current_row][current_col]
+                std::vector<particle_t*> current_bin = bins[current_row][current_col];
+                //std::cout << "bin size: " << current_bin.size() << std::endl;
+
+                for (int p = 0; p < current_bin.size(); p++ ) {
+                    current_bin[p]->ax = current_bin[p]->ay = 0;
+
+
+                    //Iterate through close_bins
+                    for (int neighbor_index = 0; neighbor_index < close_bins.size(); neighbor_index ++){
+                        std::vector<particle_t*> current_neighbor = close_bins[neighbor_index];
+
+                        //Iterate through close particles
+                        for (int np = 0; np < current_neighbor.size(); np++){
+                            apply_force( *current_bin[p], *current_neighbor[np], &dmin, &davg, &navg);
+                        }
+                    }
+                }
+            }
+        }
+
+
+
+
+
+
+ //____________________________________________________________________________________________________________
         //
         //  move particles
         //
-        for( int i = 0; i < n; i++ ) 
-            move( particles[i] );		
+        for( int i = 0; i < n; i++ )  {
+            //std::cout << particles[i].ax << std::endl;
+            move( particles[i] );
+        }
 
         if( find_option( argc, argv, "-no" ) == -1 )
         {
