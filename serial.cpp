@@ -55,7 +55,7 @@ private:
     BHTree* NE; // tree representing northeast quadrant
     BHTree* SW; // tree representing southwest quadrant
     BHTree* SE; // tree representing southeast quadrant
-    void fork(); // fork into 4 child nodes
+    void branch(); // branch into 4 child nodes
     void insertChild(Body &);
 
 public:
@@ -122,7 +122,7 @@ BHTree::BHTree(Quad* q){
     SE = nullptr;
 };
 
-void BHTree::fork(){
+void BHTree::branch(){
     double hl = (quad->length)/2;
     Quad* q1 = new Quad(quad->x, (quad->y)+hl, hl);
     Quad* q2 = new Quad(quad->x + hl, quad->y + hl, hl);
@@ -140,15 +140,15 @@ void BHTree::insertChild(Body &b){    // insert body into a child node
     Quad q3 = *(SW->quad);
     Quad q4 = *(SE->quad);
     if (b.in(q1))
-    NW->insert(b);
+        NW->insert(b);
     else if (b.in(q2))
-    NE->insert(b);
+        NE->insert(b);
     else if (b.in(q3))
-    SW->insert(b);
+        SW->insert(b);
     else if (b.in(q4))
-    SE->insert(b);
+        SE->insert(b);
     else
-    perror("Could not locate a quadrant for body.");
+        perror("Could not locate a quadrant for body.");
 };
 
 void BHTree::insert(Body & b){
@@ -168,8 +168,8 @@ void BHTree::insert(Body & b){
     else if (body->n_part == 1){ // external node
         // create new combined body
         Body* new_body = addBody(*body, b);
-        // fork this node
-        fork();
+        // branch this node
+        branch();
         // insert body into a child node
         insertChild(*body);
         insertChild(b);
