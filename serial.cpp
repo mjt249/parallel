@@ -274,7 +274,7 @@ int main( int argc, char **argv )
             particles[i].ax = particles[i].ay = 0;
             tree_ptr->totalForce(&particles[i], &dmin, &davg, &navg);
         };
-//        delete tree_ptr; // chop tree
+        delete tree_ptr; // chop tree
 
         //
         //  move particles
