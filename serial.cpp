@@ -55,12 +55,13 @@ private:
     BHTree* NE; // tree representing northeast quadrant
     BHTree* SW; // tree representing southwest quadrant
     BHTree* SE; // tree representing southeast quadrant
+    BHTree* parent;
     void branch(); // branch into 4 child nodes
     void insertChild(Body &);
 
 public:
     // Constructor
-    BHTree(Quad *); // create a Barnes-Hut tree with no bodies, representing
+    BHTree(Quad *, BHTree*); // create a Barnes-Hut tree with no bodies, representing
                     // the given quadrant.
     ~BHTree(){
         delete body;
@@ -113,13 +114,14 @@ bool Body::in(Quad & q){
 };
 
 /* Implementation for BHTree */
-BHTree::BHTree(Quad* q){
+BHTree::BHTree(Quad* q, BHTree* rent){
     quad = q;
     body = nullptr;
     NW = nullptr;
     NE = nullptr;
     SW = nullptr;
     SE = nullptr;
+    parent = rent;
 };
 
 void BHTree::branch(){
@@ -128,10 +130,10 @@ void BHTree::branch(){
     Quad* q2 = new Quad(quad->x + hl, quad->y + hl, hl);
     Quad* q3 = new Quad(quad->x, quad->y, hl);
     Quad* q4 = new Quad(quad->x + hl, quad->y, hl);
-    NW = new BHTree(q1);
-    NE = new BHTree(q2);
-    SW = new BHTree(q3);
-    SE = new BHTree(q4);
+    NW = new BHTree(q1, this);
+    NE = new BHTree(q2, this);
+    SW = new BHTree(q3, this);
+    SE = new BHTree(q4, this);
 };
 
 void BHTree::insertChild(Body &b){    // insert body into a child node
@@ -215,7 +217,7 @@ Body* addBody(const Body & a, const Body & b){
 BHTree* buildTree(int n, particle_t* particles, double SIZE){
     // build root node
     Quad * quad_root = new Quad(0, 0, SIZE);
-    BHTree* Tp = new BHTree(quad_root);
+    BHTree* Tp = new BHTree(quad_root, nullptr);
     // insert particles into the root
     for (int i = 0; i < n; i++){
         // pack particle into body
