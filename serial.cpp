@@ -13,6 +13,12 @@
 #define min_r   (cutoff/100)
 #define dt      0.0005
 
+#define CHILDREN 4
+#define NW 0
+#define NE 1
+#define SW 2
+#define SE 3
+
 double SIZE;
 //
 //  benchmarking program
@@ -51,27 +57,24 @@ class BHTree{
 private:
     Body* body; // body or aggregate body stored in this node
     Quad* quad; // square region that the tree represents
-    BHTree* NW; // tree representing northwest quadrant
-    BHTree* NE; // tree representing northeast quadrant
-    BHTree* SW; // tree representing southwest quadrant
-    BHTree* SE; // tree representing southeast quadrant
+    BHTree* children[CHILDREN];
     BHTree* parent;
+    int child_index;
     void branch(); // branch into 4 child nodes
     void insertChild(Body &);
 
 public:
     // Constructor
-    BHTree(Quad *, BHTree*); // create a Barnes-Hut tree with no bodies, representing
-                    // the given quadrant.
+    BHTree(Quad *, BHTree*, int); // create a Barnes-Hut tree with no bodies,
+                             // representing the given quadrant.
     ~BHTree(){
         delete body;
         delete quad;
-        delete NW;
-        delete NE;
-        delete SW;
-        delete SE;
+        for (int i = 0; i < CHILDREN; i++) {
+            delete children[i];
+        }
     };
-    void insert(Body &); // add the body to the involking Barnes-Hut tree
+    void insert(Body &, int); // add the body to the involking Barnes-Hut tree
     void totalForce(particle_t*, double *, double *, int *); // apply force on
                                                              // particle from
                                                              // all bodies in
@@ -114,14 +117,14 @@ bool Body::in(Quad & q){
 };
 
 /* Implementation for BHTree */
-BHTree::BHTree(Quad* q, BHTree* rent){
+BHTree::BHTree(Quad* q, BHTree* rent, int child_order=-1){
     quad = q;
     body = nullptr;
-    NW = nullptr;
-    NE = nullptr;
-    SW = nullptr;
-    SE = nullptr;
+    for (int i = 0; i < CHILDREN; i++) {
+        children[i] = nullptr;
+    }
     parent = rent;
+    child_index = child_order;
 };
 
 void BHTree::branch(){
@@ -130,31 +133,32 @@ void BHTree::branch(){
     Quad* q2 = new Quad(quad->x + hl, quad->y + hl, hl);
     Quad* q3 = new Quad(quad->x, quad->y, hl);
     Quad* q4 = new Quad(quad->x + hl, quad->y, hl);
-    NW = new BHTree(q1, this);
-    NE = new BHTree(q2, this);
-    SW = new BHTree(q3, this);
-    SE = new BHTree(q4, this);
+    children[NW] = new BHTree(q1, this, NW);
+    children[NE] = new BHTree(q2, this, NE);
+    children[SW] = new BHTree(q3, this, SW);
+    children[SE] = new BHTree(q4, this, SE);
 };
 
 void BHTree::insertChild(Body &b){    // insert body into a child node
-    Quad q1 = *(NW->quad);
-    Quad q2 = *(NE->quad);
-    Quad q3 = *(SW->quad);
-    Quad q4 = *(SE->quad);
+    Quad q1 = *(children[NW]->quad);
+    Quad q2 = *(children[NE]->quad);
+    Quad q3 = *(children[SW]->quad);
+    Quad q4 = *(children[SE]->quad);
     if (b.in(q1))
-        NW->insert(b);
+        children[NW]->insert(b, NW);
     else if (b.in(q2))
-        NE->insert(b);
+        children[NE]->insert(b, NE);
     else if (b.in(q3))
-        SW->insert(b);
+        children[SW]->insert(b, SW);
     else if (b.in(q4))
-        SE->insert(b);
+        children[SE]->insert(b, SE);
     else
         perror("Could not locate a quadrant for body.");
 };
 
-void BHTree::insert(Body & b){
+void BHTree::insert(Body & b, int ci){
     if (body == nullptr){ // empty node
+        child_index = ci;
         body = &b;
     }
     else if (body->n_part > 1){ // internal node
@@ -168,6 +172,7 @@ void BHTree::insert(Body & b){
         insertChild(b);
     }
     else if (body->n_part == 1){ // external node
+        child_index = ci;
         // create new combined body
         Body* new_body = addBody(*body, b);
         // branch this node
@@ -192,10 +197,10 @@ void BHTree::totalForce(particle_t* ptc, double* dmin, double* davg, int* navg){
         double r = sqrt(dx * dx + dy * dy);
         if (r - 1.414*(quad->length) < cutoff){ // not entire cluster beyond
                                                 // cutoff
-            NW->totalForce(ptc, dmin, davg, navg);
-            NE->totalForce(ptc, dmin, davg, navg);
-            SW->totalForce(ptc, dmin, davg, navg);
-            SE->totalForce(ptc, dmin, davg, navg);
+            children[NW]->totalForce(ptc, dmin, davg, navg);
+            children[NE]->totalForce(ptc, dmin, davg, navg);
+            children[SW]->totalForce(ptc, dmin, davg, navg);
+            children[SE]->totalForce(ptc, dmin, davg, navg);
         };
     }
     else if (body->n_part == 1){ // external node
@@ -222,7 +227,7 @@ BHTree* buildTree(int n, particle_t* particles, double SIZE){
     for (int i = 0; i < n; i++){
         // pack particle into body
         Body* b = new Body(particles[i]);
-        Tp->insert(*b);
+        Tp->insert(*b, -1);
     };
     return Tp;
 };
