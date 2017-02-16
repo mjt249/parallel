@@ -14,6 +14,7 @@
 #define dt      0.0005
 
 #define CHILDREN 4
+#define NO -1
 #define NW 0
 #define NE 1
 #define SW 2
@@ -61,7 +62,9 @@ private:
     BHTree* parent;
     int child_index;
     void branch(); // branch into 4 child nodes
+    void collapse(); // undo branch
     void insertChild(Body &);
+    void emancipateChild(int);
 
 public:
     // Constructor
@@ -113,21 +116,26 @@ Body::Body(int n_part_in, double px_in, double py_in){
 };
 
 bool Body::in(Quad & q){
-    return q.contains(px, py);
+    bool ret = q.contains(px, py);
+    printf("(%f, %f) is within %f of (%f,%f)\n", px, py, q.length, q.x, q.y);
 };
 
 /* Implementation for BHTree */
-BHTree::BHTree(Quad* q, BHTree* rent, int child_order=-1){
+BHTree::BHTree(Quad* q, BHTree* rent, int child_order=NO){
     quad = q;
     body = nullptr;
     for (int i = 0; i < CHILDREN; i++) {
         children[i] = nullptr;
     }
-    parent = rent;
+    if (rent == nullptr)
+        parent = this;
+    else
+        parent = rent;
     child_index = child_order;
 };
 
 void BHTree::branch(){
+    printf("Branching %x\n", this);
     double hl = (quad->length)/2;
     Quad* q1 = new Quad(quad->x, (quad->y)+hl, hl);
     Quad* q2 = new Quad(quad->x + hl, quad->y + hl, hl);
@@ -137,27 +145,59 @@ void BHTree::branch(){
     children[NE] = new BHTree(q2, this, NE);
     children[SW] = new BHTree(q3, this, SW);
     children[SE] = new BHTree(q4, this, SE);
+    printf("Finished branching\n");
+};
+
+void BHTree::collapse(){
+    int siblings = -1;
+    for (int i = 0; i < CHILDREN; i++) {
+        if(parent->children[i] != nullptr)
+            siblings++;
+    }
+    if(siblings > 0) {
+        perror("attempt to collapse node with children");
+        exit(1);
+    }
+
 };
 
 void BHTree::insertChild(Body &b){    // insert body into a child node
-    Quad q1 = *(children[NW]->quad);
-    Quad q2 = *(children[NE]->quad);
-    Quad q3 = *(children[SW]->quad);
-    Quad q4 = *(children[SE]->quad);
-    if (b.in(q1))
-        children[NW]->insert(b, NW);
-    else if (b.in(q2))
-        children[NE]->insert(b, NE);
-    else if (b.in(q3))
-        children[SW]->insert(b, SW);
-    else if (b.in(q4))
-        children[SE]->insert(b, SE);
+    for (int i = 0; i < CHILDREN; i++) {
+        Quad q = *(children[i]->quad);
+        if (b.in(q)) {
+            children[i]->insert(b, i);
+            printf("inserted child %x at index %d\n", &b, i);
+            return;
+        }
+    }
+    // couldn't find a quadrant
+    if (parent != this) {
+        parent->emancipateChild(child_index);
+        parent->insert(b, NO);
+    }
     else
         perror("Could not locate a quadrant for body.");
 };
 
+void BHTree::emancipateChild(int index) {
+    Body *b = children[index]->body;
+    // update center of mass
+    body->px = (body->px * body->n_part - b->px * b->n_part)
+        / (body->n_part-b->n_part);
+    body->py = (body->py * body->n_part - b->py * b->n_part)
+        / (body->n_part-b->n_part);
+    body->n_part -= b->n_part;
+    // detach child
+    children[index] = nullptr;
+
+    // if (body->n_part == 1) {
+    //     collapse();
+    // }
+}
+
 void BHTree::insert(Body & b, int ci){
     if (body == nullptr){ // empty node
+        printf("body of %x is null, b is %x\n", this, &b);
         child_index = ci;
         body = &b;
     }
@@ -172,14 +212,16 @@ void BHTree::insert(Body & b, int ci){
         insertChild(b);
     }
     else if (body->n_part == 1){ // external node
-        child_index = ci;
         // create new combined body
         Body* new_body = addBody(*body, b);
         // branch this node
+        printf("Branch me once, shame on you\n");
         branch();
         // insert body into a child node
         insertChild(*body);
+        printf("Inserted *body (%x)\n", body);
         insertChild(b);
+        printf("Inserted b (%x)\n", &b);
         body = new_body;
     }
     else {
@@ -189,8 +231,10 @@ void BHTree::insert(Body & b, int ci){
 
 void BHTree::totalForce(particle_t* ptc, double* dmin, double* davg, int* navg){
     if (body == nullptr){ // empty node
+        printf("body of %x is null\n", this);
     }
     else if (body->n_part > 1){ // internal node
+        printf("body of %x has npart %d > 1\n", this, body->n_part);
         // check distance
         double dx = body->px - ptc->x;
         double dy = body->py - ptc->y;
@@ -204,7 +248,11 @@ void BHTree::totalForce(particle_t* ptc, double* dmin, double* davg, int* navg){
         };
     }
     else if (body->n_part == 1){ // external node
+        printf("body of %x has npart %d == 1\n", this, body->n_part);
         apply_force(*ptc, *(body->p_particle), dmin, davg, navg);
+        printf("applied force\n");
+        parent->insert(*body, NO);
+        printf("insert complete\n");
     }
 };
 
@@ -223,11 +271,15 @@ BHTree* buildTree(int n, particle_t* particles, double SIZE){
     // build root node
     Quad * quad_root = new Quad(0, 0, SIZE);
     BHTree* Tp = new BHTree(quad_root, nullptr);
+    printf("built root\n");
     // insert particles into the root
     for (int i = 0; i < n; i++){
+        printf("inserting particle %d\n", i);
         // pack particle into body
         Body* b = new Body(particles[i]);
-        Tp->insert(*b, -1);
+        printf("body created\n");
+        Tp->insert(*b, NO);
+        printf("inserted particle\n");
     };
     return Tp;
 };
@@ -267,6 +319,8 @@ int main( int argc, char **argv )
     //
     double simulation_time = read_timer( );
 
+    printf("building tree\n");
+    BHTree* tree_ptr = buildTree(n, particles, SIZE); // build tree
     for( int step = 0; step < NSTEPS; step++ )
     {
 	navg = 0;
@@ -275,13 +329,13 @@ int main( int argc, char **argv )
         //
         //  compute forces
         //
-        BHTree* tree_ptr = buildTree(n, particles, SIZE); // build tree
         for( int i = 0; i < n; i++ )
         {
             particles[i].ax = particles[i].ay = 0;
             tree_ptr->totalForce(&particles[i], &dmin, &davg, &navg);
+            printf("called total force\n");
         };
-        delete tree_ptr; // chop tree
+        // delete tree_ptr; // chop tree
 
         //
         //  move particles
