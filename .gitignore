@@ -1,3 +1,5 @@
 .idea/
 cmake-build-debug/
 *.o
+openmp_back.cpp
+CMakeLists.txt
