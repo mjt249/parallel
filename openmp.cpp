@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
             double size = sqrt(density * n);
 
             // Create Bins as a cell_num by cell_num matrix of Vectors
-            int cell_num = 64;
+            int cell_num = 16;
             std::vector<particle_t *> bins[cell_num][cell_num];
             for (int i = 0; i < cell_num; i++) {
                 for (int j = 0; j < cell_num; j++) {
@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
 
             // Compute forces
 
-// TODO: Use the "num_threads(n)" to set the number of threads this parallel block uses
+
 #pragma omp parallel
             {
 #pragma omp for collapse(2) reduction(+:navg) reduction(+:davg) firstprivate(dmin) schedule(dynamic)

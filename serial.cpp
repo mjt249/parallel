@@ -59,8 +59,7 @@ int main( int argc, char **argv )
 //
 // ________________________________________________________________________________
 
-        // John's TODO!
-        // TODO: Make sure the total number of points in the bins equals N
+
 
         double density = .0005;
         double size = sqrt( density * n );
@@ -90,7 +89,6 @@ int main( int argc, char **argv )
 
         // Compute forces
 
-        int nnn = 0;
 
         for (int current_row = 0; current_row < cell_num; current_row++)
         {
