@@ -49,16 +49,20 @@ void set_size( int n )
 //
 void init_particles( int n, particle_t *p )
 {
-    srand48( time( NULL ) );
-        
+    // time_t seed = time(NULL);
+    // time_t seed = 1487275623;
+    time_t seed = 1487373651;
+    srand48(seed);
+    printf("random seed: %lu\n", seed);
+
     int sx = (int)ceil(sqrt((double)n));
     int sy = (n+sx-1)/sx;
-    
+
     int *shuffle = (int*)malloc( n * sizeof(int) );
     for( int i = 0; i < n; i++ )
         shuffle[i] = i;
-    
-    for( int i = 0; i < n; i++ ) 
+
+    for( int i = 0; i < n; i++ )
     {
         //
         //  make sure particles are not spatially sorted
@@ -66,7 +70,7 @@ void init_particles( int n, particle_t *p )
         int j = lrand48()%(n-i);
         int k = shuffle[j];
         shuffle[j] = shuffle[n-i-1];
-        
+
         //
         //  distribute particles evenly to ensure proper spacing
         //
@@ -100,12 +104,12 @@ void apply_force( particle_t &particle, particle_t &neighbor , double *dmin, dou
            (*davg) += sqrt(r2)/cutoff;
            (*navg) ++;
         }
-		
+
     r2 = fmax( r2, min_r*min_r );
     double r = sqrt( r2 );
- 
-    
-	
+
+
+
     //
     //  very simple short-range repulsive force
     //
