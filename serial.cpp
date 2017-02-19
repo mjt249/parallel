@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <math.h>
 #include "common.h"
+#include <assert.h>
 
 #define DELTA 0.5
 #define nullptr NULL
@@ -35,7 +36,7 @@ public:
 // Constructor
     Quad(double, double, double);
 // Member functions
-    bool contains(double, double); // returns whether a point is in quadrant
+    bool contains(double, double) const; // returns whether a point is in quadrant
 };
 
 // Object Body: Represent a body in BHTree
@@ -50,7 +51,7 @@ public:
     // Constructor
     Body(particle_t &); // Construct body from particle_t
     Body(int, double, double); // Construct clusters by providing the attributes
-    bool in(Quad &); // Function to test if body is in a certain quad domain
+    bool in(const Quad &) const; // Function to test if body is in a certain quad domain
 };
 
 // Object BHTree: Barnes-Hut tree structure
@@ -62,28 +63,31 @@ private:
     BHTree* parent;
     int child_index;
     void branch(); // branch into 4 child nodes
-    void insertChild(Body &);
-    void emancipateChild(int);
-    void updateCenterOfMass();
+    void collapse();
+    void insertChild(Body *);
+    Body* emancipateChild(int);
 
 public:
     // Constructor
     BHTree(Quad *, BHTree*, int); // create a Barnes-Hut tree with no bodies,
                              // representing the given quadrant.
     ~BHTree(){
-        delete body;
+        // delete body;
         delete quad;
         for (int i = 0; i < CHILDREN; i++) {
             delete children[i];
         }
     };
-    void insert(Body &, int); // add the body to the involking Barnes-Hut tree
+    void insert(Body *, int); // add the body to the involking Barnes-Hut tree
     void totalForce(particle_t*, double *, double *, int *); // apply force on
                                                              // particle from
                                                              // all bodies in
                                                              // the invoking
                                                              // Barnes-Hut tree
-    void moveBodies();
+    void updateBodies();
+    void updateCenterOfMass();
+    int bodyCount(bool, int);
+    bool consistent();
 };
 
 // Auxilliary Functions
@@ -97,9 +101,9 @@ Quad::Quad(double x_in, double y_in, double length_in){
     length = length_in;
 };
 
-bool Quad::contains(double x_q, double y_q){
-    return (x_q >= x) && (x_q <= (x + length)) &&
-        (y_q >= y) && (y_q <= y + length);
+bool Quad::contains(double x_q, double y_q) const {
+    return (x_q >= x) && (x_q < (x + length)) &&
+        (y_q >= y) && (y_q < y + length);
 };
 
 /* Implementations for Body */
@@ -114,19 +118,22 @@ Body::Body(int n_part_in, double px_in, double py_in){
     n_part = n_part_in;
     px = px_in;
     py = py_in;
+    p_particle = nullptr;
 };
 
-bool Body::in(Quad & q){
+bool Body::in(const Quad & q) const{
     bool ret = q.contains(px, py);
     // if (ret)
     //     printf("(%f, %f) is between (%f, %f) and (%f,%f)\n", px, py, q.x, q.y, q.x + q.length, q.y + q.length);
+    // else
+    //     printf("(%f, %f) is not between (%f, %f) and (%f,%f)\n", px, py, q.x, q.y, q.x + q.length, q.y + q.length);
     return ret;
 };
 
 /* Implementation for BHTree */
 BHTree::BHTree(Quad* q, BHTree* rent, int child_order=NO){
     quad = q;
-    body = nullptr;
+    body = new Body(0,0,0);
     for (int i = 0; i < CHILDREN; i++) {
         children[i] = nullptr;
     }
@@ -135,6 +142,7 @@ BHTree::BHTree(Quad* q, BHTree* rent, int child_order=NO){
     else
         parent = rent;
     child_index = child_order;
+    printf("\t\tCreated node %p as child %d of %p\n",this, child_index, parent);
 };
 
 void BHTree::branch(){
@@ -151,36 +159,131 @@ void BHTree::branch(){
     // printf("Finished branching\n");
 };
 
+void BHTree::collapse() {
+    bool didSomething = false;
+    printf("Collapsing %p. Before:\n", this);
+    bodyCount(true,0);
+    int childcount = 0;
+    for (int i = 0; i < CHILDREN; i++) {
+        if (children[i] != nullptr && children[i]->body->n_part != 0) {
+            childcount++;
+        }
+    }
+    if (childcount > 1) {
+        printf("error collapsing %p\n", this);
+        parent->bodyCount(true, 0);
+    }
+    assert (childcount <= 1);
+    body->n_part = 0;
+    for (int i = 0; i < CHILDREN; i++) {
+        if (children[i] != nullptr) {
+            // children[i]->collapse();
+            if (children[i]->body->n_part != 0) {
+                if (children[i]->body->p_particle == nullptr) {
+                    children[i]->collapse();
+                }
+                body = children[i]->body;
+                // children[i]->body = nullptr;
+                printf("Collapsed node %p into %p\n", children[i], this);
+                // else {
+                // }
+            }
+            delete children[i];
+            children[i] = nullptr;
+            didSomething = true;
+        }
+    }
+    if (didSomething) {
+        printf("After:\n");
+        bodyCount(true, 0);
+    }
+}
+
+Body* BHTree::emancipateChild(int index) {
+    printf("Emancipating %p (index %d, particle %p) from %p\n",
+            children[index],index, children[index]->body->p_particle, this);
+    assert (!(children[index]->body->in(*(children[index]->quad))));
+    Body* b = children[index]->body;
+    // update center of mass
+    body->px = (body->px * body->n_part - b->px * b->n_part)
+        / (body->n_part-b->n_part);
+    body->py = (body->py * body->n_part - b->py * b->n_part)
+        / (body->n_part-b->n_part);
+    body->n_part -= b->n_part;
+    printf("Changed %p's npart from %d to %d\n",
+            this, body->n_part + b->n_part, body->n_part);
+    // detach child
+    children[index]->body = new Body(0,0,0);
+
+    if (body->n_part <= 1) {
+        // now empty
+        // printf("Deleting empty node %p\n", this);
+        // parent->collapse();
+        printf("Collapsing %p from emancipateChild\n", this);
+        collapse();
+    }
+
+    assert (b != nullptr);
+    return b;
+}
+
 // returns whether this subtree has changed
-void BHTree::moveBodies(){
-    if (body == nullptr) {
-    } else if (body->n_part > 1) { //internal node
+void BHTree::updateBodies(){
+    if (body->p_particle == nullptr) { //internal node
         for (int i = 0; i < CHILDREN; i++) {
             if (children[i] != nullptr) {
-                children[i]->moveBodies();
-                children[i]->updateCenterOfMass();
-                if ((children[i]->body != nullptr) &&
+                // printf("updating %p\n", children[i]);
+                children[i]->updateBodies();
+                if ((children[i]->body->p_particle != nullptr) &&
+                        (children[i]->body->n_part != 0) &&
                         !(children[i]->body->in(*(children[i]->quad)))) {
                     // we're not in the right place anymore
-                    emancipateChild(child_index);
-                    insertChild(*body);
+                    // printf("Calling emancipate from %p.updateBodies (child %d, %p). Particle is %p\n",
+                    //         this, i, children[i], children[i]->body->p_particle);
+                    Body* b = emancipateChild(i);
+                    body->n_part -= b->n_part;
+                    printf("Changed %p's n_part from %d to %d\n", this,
+                            body->n_part + b->n_part, body->n_part);
+                    insert(b, NO);
+                    printf("moved particle %p, now n_part is %d\n",
+                            b->p_particle, body->n_part);
+                    parent->bodyCount(true, 0);
+                    // if (body->n_part == 1) {
+                    //     collapse();
+                    // }
                 }
             }
         }
         // update center of mass
-    } else if (body->n_part == 1) {
+    } else if (body->n_part > 0) {
         // external node
+        double oldx = body->p_particle->x;
+        double oldy = body->p_particle->y;
         move(*(body->p_particle));
-    } else { perror("moveBodies error"); }
+        body->px = body->p_particle->x;
+        body->py = body->p_particle->y;
+        // printf("Moved %p's %p from (%f,%f) to (%f,%f)\n", this, body->p_particle,
+        //         oldx, oldy, body->p_particle->x, body->p_particle->y);
+        // printf("Quad is (%f, %f) to (%f,%f)\n", quad->x, quad->y, quad->x + quad->length, quad->y + quad->length);
+    } else {
+        // printf("Attempt to update %p which has %d particles\n",
+        //         this, body->n_part);
+        // assert(false);
+    }
+    // if (body->n_part == 1 && body->p_particle == nullptr) {
+    //     printf("Collapsing %p from updateBodies\n", this);
+    //     collapse();
+    // }
 }
 
-void BHTree::insertChild(Body &b){    // insert body into a child node
+void BHTree::insertChild(Body * b){    // insert body into a child node
+    assert (b->p_particle != nullptr);
     for (int i = 0; i < CHILDREN; i++) {
         Quad q = *(children[i]->quad);
-        if (b.in(q)) {
-            if (children[i]->body != nullptr) {
-                printf("\tchild node %p (index %d of %p) occupied\n",
-                        children[i], i, this);
+        if (b->in(q)) {
+            if (children[i]->body->n_part != 0) {
+                // printf("\tchild node %p (index %d of %p) occupied\n",
+                //         children[i], i, this);
             }
             children[i]->insert(b, i);
             // printf("\tinserted particle %p into %p (child %d of %p)\n",
@@ -190,65 +293,49 @@ void BHTree::insertChild(Body &b){    // insert body into a child node
     }
     // couldn't find a quadrant
     if (parent != this) {
-        printf("\t\tre-inserting child %p into %p\n",this, parent);
-        parent->emancipateChild(child_index);
+        // printf("\t\tre-inserting particle %p into %p\n",b->p_particle, parent);
+        // parent->emancipateChild(child_index);
+        body->n_part -= b->n_part;
         parent->insert(b, NO);
     }
     else
         perror("Could not locate a quadrant for body.");
 };
 
-void BHTree::emancipateChild(int index) {
-    Body *b = children[index]->body;
-    // update center of mass
-    body->px = (body->px * body->n_part - b->px * b->n_part)
-        / (body->n_part-b->n_part);
-    body->py = (body->py * body->n_part - b->py * b->n_part)
-        / (body->n_part-b->n_part);
-    body->n_part -= b->n_part;
-    // detach child
-    children[index] = nullptr;
-
-    if (body->n_part == 0) {
-        // now empty
-        parent->emancipateChild(child_index);
-        delete this;
-    }
-}
-
-void BHTree::insert(Body & b, int ci){
-    if (body == nullptr){ // empty node
-        printf("\tInserted particle %p into %p (child %d of %p)\n",
-                b.p_particle, this, child_index, parent);
+void BHTree::insert(Body * b, int ci){
+    // printf("Inserting particle %p into %p\n", b->p_particle, this);
+    assert(b->p_particle != nullptr);
+    if (body->n_part == 0 || body == b){ // empty node
+        printf("\tInserted particle %p into %p (child %d of %p). Now n_part is %d\n",
+                b->p_particle, this, child_index, parent, b->n_part);
         // printf("body of %p is null, b is %p\n", this, &b);
         child_index = ci;
-        body = &b;
+        delete body;
+        body = b;
     }
-    else if (body->n_part > 1){ // internal node
+    // else if (body->n_part > 1){ // internal node
+    else if (body->p_particle == nullptr){ // internal node
         // update center of mass
-        body->px = (body->px * body->n_part + b.px * b.n_part)
-            / (body->n_part+b.n_part);
-        body->py = (body->py * body->n_part + b.py * b.n_part)
-            / (body->n_part+b.n_part);
-        body->n_part += b.n_part;
+        // body->px = (body->px * body->n_part + b->px * b->n_part)
+        //     / (body->n_part+b->n_part);
+        // body->py = (body->py * body->n_part + b->py * b->n_part)
+        //     / (body->n_part+b->n_part);
+        body->n_part += b->n_part;
         // insert body into a child node
         insertChild(b);
     }
-    else if (body->n_part == 1){ // external node
+    else { // external node
+        assert (body->p_particle != b->p_particle);
         // create new combined body
-        Body* new_body = addBody(*body, b);
+        Body* new_body = addBody(*body, *b);
         // branch this node
-        // printf("Branch me once, shame on you\n");
         branch();
         // insert body into a child node
-        insertChild(*body);
+        insertChild(body);
+        body = new_body;
         // printf("Inserted *body (%p)\n", body);
         insertChild(b);
         // printf("Inserted b (%p)\n", &b);
-        body = new_body;
-    }
-    else {
-        perror("Error while inserting body into BHTree.");
     }
 };
 
@@ -256,7 +343,7 @@ void BHTree::totalForce(particle_t* ptc, double* dmin, double* davg, int* navg){
     if (body == nullptr){ // empty node
         // printf("body of %p is null\n", this);
     }
-    else if (body->n_part > 1){ // internal node
+    else if (body->p_particle == nullptr && body->n_part != 0){ // internal node
         // printf("body of %p has npart %d > 1\n", this, body->n_part);
         // check distance
         double dx = body->px - ptc->x;
@@ -264,15 +351,21 @@ void BHTree::totalForce(particle_t* ptc, double* dmin, double* davg, int* navg){
         double r = sqrt(dx * dx + dy * dy);
         if (r - 1.414*(quad->length) < cutoff){ // not entire cluster beyond
                                                 // cutoff
-            children[NW]->totalForce(ptc, dmin, davg, navg);
-            children[NE]->totalForce(ptc, dmin, davg, navg);
-            children[SW]->totalForce(ptc, dmin, davg, navg);
-            children[SE]->totalForce(ptc, dmin, davg, navg);
+            for (int i = 0; i < CHILDREN; i++) {
+                // printf("Child %d of %p is %p\n", i, this, children[i]);
+                if (children[i] == nullptr) {
+                    printf("Error updating forces: child %d of %p is null.\n", i, this);
+                    parent->bodyCount(true, 0);
+                    assert(false);
+                }
+                children[i]->totalForce(ptc, dmin, davg, navg);
+            }
         };
     }
-    else if (body->n_part == 1){ // external node
+    else if (body->p_particle != nullptr){ // external node
         // printf("body of %p has npart %d == 1\n", *this, body->n_part);
         apply_force(*ptc, *(body->p_particle), dmin, davg, navg);
+        // printf("Applied force from %p to %p\n", ptc, this);
         // printf("applied force\n");
         // parent->insert(*body, NO);
         // printf("insert complete\n");
@@ -280,19 +373,78 @@ void BHTree::totalForce(particle_t* ptc, double* dmin, double* davg, int* navg){
 };
 
 void BHTree::updateCenterOfMass() {
-    if (body != nullptr && body->n_part > 1) { //internal node
+    // printf("Updating centers of mass: %p. n_part = %d\n", this, body->n_part);
+    if (body->n_part > 1) { //internal node
         body->px = 0;
         body->py = 0;
+        body->n_part = 0;
         for (int i = 0; i < CHILDREN; i++) {
-            // children[i]->updateCenterOfMass();
-            if (children[i]->body != nullptr) {
-                body->px += children[i]->body->px * children[i]->body->n_part;
-                body->py += children[i]->body->py * children[i]->body->n_part;
+            children[i]->updateCenterOfMass();
+            body->px += children[i]->body->px * children[i]->body->n_part;
+            body->py += children[i]->body->py * children[i]->body->n_part;
+            body->n_part += children[i]->body->n_part;
+            // printf("%p now has n_part %d\n", this, body->n_part);
+        }
+        if (body->n_part == 1) {
+            collapse();
+        } else {
+            body->px /= body->n_part;
+            body->py /= body->n_part;
+        }
+    } else if (body->p_particle != nullptr && body->n_part == 1) {
+        body->px = body->p_particle->x;
+        body->py = body->p_particle->y;
+    } else if (body->p_particle != nullptr) {
+        printf("Node %p is broken: Has particle %p but n_part %d\n",
+                this, body->p_particle, body->n_part);
+        assert(false);
+    }
+}
+
+int BHTree::bodyCount(bool verbose, int level) {
+    if (verbose) {
+        for (int i = 0; i < level; i++) {
+            printf("\t");
+        }
+        printf("%p = %d ", this, body->n_part);
+        if (body->p_particle != nullptr)
+            printf("(%p)", body->p_particle);
+    }
+    if (verbose) printf("\n");
+    for (int i = 0; i < CHILDREN; i++) {
+        if (children[i] != nullptr) {
+            children[i]->bodyCount(verbose, level + 1);
+        }
+    }
+    return body->n_part;
+}
+
+bool BHTree::consistent() {
+    if (body->p_particle != nullptr) { //external node
+        if (body->n_part != 1){
+            printf("%p is a particle leaf with n_part == %d\n", this, body->n_part);
+            return false;
+        }
+        for (int i = 0; i < CHILDREN; i++) {
+            if (children[i] != nullptr){
+                printf("%p is a particle leaf with a child %p\n", this, children[i]);
+                return false;
             }
         }
-        body->px /= body->n_part;
-        body->py /= body->n_part;
+    } else { //internal node - expect non-null leaves
+        int nulls = 0;
+        for (int i = 0; i < CHILDREN; i++) {
+            if (children[i] != nullptr) {
+                nulls++;
+                if (!children[i]->consistent()) return false;
+            }
+        }
+        if (nulls != 0 && nulls != 4) {
+            printf("%p has mixed null and non-null chlidren\n", this);
+            return false;
+        }
     }
+    return true;
 }
 
 /* Auxilliary Function Implementations */
@@ -317,7 +469,7 @@ BHTree* buildTree(int n, particle_t* particles, double SIZE){
         // pack particle into body
         Body* b = new Body(particles[i]);
         // printf("body created\n");
-        Tp->insert(*b, NO);
+        Tp->insert(b, NO);
         // printf("inserted particle\n");
     };
     return Tp;
@@ -360,7 +512,8 @@ int main( int argc, char **argv )
 
     printf("building tree\n");
     BHTree* tree_ptr = buildTree(n, particles, SIZE); // build tree
-    printf("///////////////////////////////DONE BUILDING TREE\n");
+    printf("///////////////////////////////DONE BUILDING TREE. Particles: %d\n",
+            tree_ptr->bodyCount(true, 0));
     for( int step = 0; step < NSTEPS; step++ )
     {
 	navg = 0;
@@ -376,11 +529,21 @@ int main( int argc, char **argv )
             // printf("called total force\n");
         };
         // delete tree_ptr; // chop tree
-
+        assert(tree_ptr->bodyCount(false, 0) == n);
         //
         //  move particles
         //
-        tree_ptr->moveBodies();
+        tree_ptr->updateCenterOfMass();
+        tree_ptr->updateBodies();
+        tree_ptr->updateCenterOfMass();
+        // if (tree_ptr->bodyCount(false) != n)
+        if (!(tree_ptr->consistent()) || !(tree_ptr->bodyCount(false, 0) == n)) {
+            printf("BODY COUNT: %d\n",tree_ptr->bodyCount(true, 0));
+            assert(false);
+        } else {
+            printf("consistent step %d\n", step);
+        }
+        assert(tree_ptr->bodyCount(false, 0) == n);
         // for( int i = 0; i < n; i++ ) {
         //     move( particles[i] );
         //     tree_ptr->moveBody();
