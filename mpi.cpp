@@ -127,12 +127,14 @@ int main( int argc, char **argv )
     int* rc = (int*) malloc( n_proc * sizeof(int) );
     int* dp = (int*) malloc( n_proc * sizeof(int) );
     for (int pid = 0; pid < n_proc; pid++){
-        rc[i] = 1;
-        dp[i] = pid;
+        rc[pid] = 1;
+        dp[pid] = pid;
     }
+    int idispls;
     int this_bin;
     int* neighbor_bins = (int*) malloc( 8 * sizeof(int) );
     int n_neighbors, particle_id;
+    int bin_x, bin_y, bin_id;
     
     //
     //  simulate a number of time steps
@@ -146,7 +148,6 @@ int main( int argc, char **argv )
 
         //  step 3 & 4: parallel binning
         //  loop through all particles in local partition and sort into M bins
-        int bin_x, bin_y, bin_id;
         for (int pid = 0; pid < nlocal; pid++){
             bin_x = ceil(local[pid].x / bin_size);
             bin_y = ceil(local[pid].y / bin_size);
@@ -160,7 +161,7 @@ int main( int argc, char **argv )
         //  calculate bin_offsets based on rolling sum of bin_population
         for (int bin_id = 0; bin_id < M; bin_id++){
             bin_count[bin_id] = bins[bin_id].size();
-            MPI_Allreduce(bin_count[bin_id], bin_population[bin_id], 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(&bin_count[bin_id], &bin_population[bin_id], 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
             if (bin_id == 0)
                 bin_offsets[bin_id] = 0;
             else
@@ -170,17 +171,16 @@ int main( int argc, char **argv )
         for (int bin_id = 0; bin_id < M; bin_id++){
             sendbuf = &bins[bin_id][0];
             for (int pid = 0; pid < n_proc; pid++){
-                sendcounts[i] = bin_count[bin_id];
-                sdispls[i] = 0;
+                sendcounts[pid] = bin_count[bin_id];
+                sdispls[pid] = 0;
             }
-            if (rank == 0){
-                MPI_Scan(bin_count[bin_id], rdispls, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allgatherv(&bin_count[bin_id], 1, MPI_INT, recvcounts, rc, dp, MPI_INT, MPI_COMM_WORLD);  // load recvcounts
+            rdispls[0] = 0;
+            for (int pid = 1; pid < n_proc; pid++){  // load rdispls
+                rdispls[pid] = rdispls[pid-1]+recvcounts[pid-1];
             }
-            MPI_Gatherv(bin_count[bin_id], 1, MPI_INT, recvcounts, rc, dp, MPI_INT, 0, MPI_COMM_WORLD);
-            MPI_Bcast(rdispls, n_proc, MPI_INT, 0, MPI_COMM_WORLD);
-            MPI_Bcast(rdispls, n_proc, MPI_INT, 0, MPI_COMM_WORLD);
             int bo = bin_offsets[bin_id];
-            MPI_Alltoallv(sendbuf, sendcounts, sdispls, PARTICLE, particle_binned[bo], recvcounts, rdispls, PARTICLE, MPI_COMM_WORLD);
+            MPI_Alltoallv(sendbuf, sendcounts, sdispls, PARTICLE, &particle_binned[bo], recvcounts, rdispls, PARTICLE, MPI_COMM_WORLD);
         }
         
         //
@@ -198,11 +198,13 @@ int main( int argc, char **argv )
             local[i].ax = local[i].ay = 0;
             this_bin = local_bininfo[i];
             n_neighbors = neighbors(this_bin, neighbor_bins);
-            for (int j = 0; j < n_neighbors; j++ ) // loop through neighbor bins
-                for (int k = 0; k < bin_population[j]; k++)
+            for (int j = 0; j < n_neighbors; j++ ){ // loop through neighbor bins
+                for (int k = 0; k < bin_population[j]; k++){
                     int bin_num = neighbor_bins[j];
                     particle_id = bin_offsets[bin_num] + k;
                     apply_force( local[i], particle_binned[particle_id], &dmin, &davg, &navg );
+                }
+            }
         }
         
         
