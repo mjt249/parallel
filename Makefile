@@ -6,7 +6,8 @@
 CC = CC
 MPCC = CC
 OPENMP = -openmp #Note: this is the flag for Intel compilers. Change this to -fopenmp for GNU compilers. See http://www.nersc.gov/users/computational-systems/edison/programming/using-openmp/
-CFLAGS = -O0 -g -std=c++0x
+#CFLAGS = -O0 -g -std=c++0x  # this option is for debugging
+CFLAGS = -O3 -std=c++0x
 LIBS = -lstdc++
 
 

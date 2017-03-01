@@ -9,7 +9,6 @@
 #define m 4  // number of bins in each direction
 #define M m*m  // total number of bins to use
 
-//
 //  auxilliary function for calculating a list of neighboring bins
 int neighbors(const int & this_bin, int* neighbor_bins){
     // input: this_bin, id of this bin (from 0 to M)
