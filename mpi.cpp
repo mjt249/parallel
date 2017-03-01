@@ -193,28 +193,24 @@ int main( int argc, char **argv )
         // step 5, 6 & 7: par_update
         // par_update(local, particle_binned, int* bin_population, bin_offsets, &dmin, &davg, &navg);
         // loop through particles in local to update force
-        /*for( int i = 0; i < nlocal; i++ )
+        for( int i = 0; i < nlocal; i++ )
         {
             local[i].ax = local[i].ay = 0;
             this_bin = local_bininfo[i];
             n_neighbors = neighbors(this_bin, neighbor_bins);
             for (int j = 0; j < n_neighbors; j++ ){ // loop through neighbor bins
-                for (int k = 0; k < bin_population[j]; k++){
-                    int bin_num = neighbor_bins[j];
+                int bin_num = neighbor_bins[j];
+                for (int k = 0; k < bin_population[bin_num]; k++){
                     particle_id = bin_offsets[bin_num] + k;
                     apply_force( local[i], particle_binned[particle_id], &dmin, &davg, &navg );
                 }
             }
-        }s*/
-        for( int i = 0; i < nlocal; i++ )
-                {
-                    local[i].ax = local[i].ay = 0;
-                    for (int j = 0; j < n; j++ )
-                        apply_force( local[i], particle_binned[j], &dmin, &davg, &navg );
-                }
+        }
+    
         
         if( find_option( argc, argv, "-no" ) == -1 )
         {
+            
             MPI_Reduce(&davg,&rdavg,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
             MPI_Reduce(&navg,&rnavg,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
             MPI_Reduce(&dmin,&rdmin,1,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD);
