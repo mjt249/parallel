@@ -9,6 +9,7 @@
 #define m 4  // number of bins in each direction
 #define M m*m  // total number of bins to use
 
+//
 //  auxilliary function for calculating a list of neighboring bins
 int neighbors(const int & this_bin, int* neighbor_bins){
     // input: this_bin, id of this bin (from 0 to M)
@@ -23,7 +24,7 @@ int neighbors(const int & this_bin, int* neighbor_bins){
         for (int j = -1; j < 2; j++){
             int nr = this_row + i;
             int nc = this_col + j;
-            if ((nr >= 0) && (nr < m) && (nc >= 0) && (nr < m)){
+            if ((nr >= 0) && (nr < m) && (nc >= 0) && (nc < m)){
                 neighbor_bins[count] = nr * m + nc;
                 count++;
             }
@@ -130,7 +131,6 @@ int main( int argc, char **argv )
         rc[pid] = 1;
         dp[pid] = pid;
     }
-    int idispls;
     int this_bin;
     int* neighbor_bins = (int*) malloc( 8 * sizeof(int) );
     int n_neighbors, particle_id;
@@ -155,7 +155,6 @@ int main( int argc, char **argv )
             bins[bin_id].push_back(local[pid]);
             local_bininfo[pid] = bin_id;
         }
-        
         //  save the size of each of the local bins
         //  allreduce bin_count across processors into bin_population
         //  calculate bin_offsets based on rolling sum of bin_population
@@ -167,6 +166,7 @@ int main( int argc, char **argv )
             else
                 bin_offsets[bin_id] = bin_offsets[bin_id-1]+bin_population[bin_id-1];
         }
+        MPI_Barrier(MPI_COMM_WORLD);
         //  alltoallv particles in each bin to particle_binned
         for (int bin_id = 0; bin_id < M; bin_id++){
             sendbuf = &bins[bin_id][0];
@@ -182,7 +182,7 @@ int main( int argc, char **argv )
             int bo = bin_offsets[bin_id];
             MPI_Alltoallv(sendbuf, sendcounts, sdispls, PARTICLE, &particle_binned[bo], recvcounts, rdispls, PARTICLE, MPI_COMM_WORLD);
         }
-        
+        MPI_Barrier(MPI_COMM_WORLD);
         //
         //  save current step if necessary (slightly different semantics than in other codes)
         //
@@ -193,7 +193,7 @@ int main( int argc, char **argv )
         // step 5, 6 & 7: par_update
         // par_update(local, particle_binned, int* bin_population, bin_offsets, &dmin, &davg, &navg);
         // loop through particles in local to update force
-        for( int i = 0; i < nlocal; i++ )
+        /*for( int i = 0; i < nlocal; i++ )
         {
             local[i].ax = local[i].ay = 0;
             this_bin = local_bininfo[i];
@@ -205,12 +205,16 @@ int main( int argc, char **argv )
                     apply_force( local[i], particle_binned[particle_id], &dmin, &davg, &navg );
                 }
             }
-        }
-        
+        }s*/
+        for( int i = 0; i < nlocal; i++ )
+                {
+                    local[i].ax = local[i].ay = 0;
+                    for (int j = 0; j < n; j++ )
+                        apply_force( local[i], particle_binned[j], &dmin, &davg, &navg );
+                }
         
         if( find_option( argc, argv, "-no" ) == -1 )
         {
-            
             MPI_Reduce(&davg,&rdavg,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
             MPI_Reduce(&navg,&rnavg,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
             MPI_Reduce(&dmin,&rdmin,1,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD);
@@ -232,6 +236,10 @@ int main( int argc, char **argv )
         //
         for( int i = 0; i < nlocal; i++ )
             move( local[i] );
+        for (int bin_id = 0; bin_id < M; bin_id++){
+            bins[bin_id].clear();
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
     }
     simulation_time = read_timer( ) - simulation_time;
     
@@ -270,6 +278,11 @@ int main( int argc, char **argv )
     free( partition_sizes );
     free( local );
     free( particles );
+    free( bin_population );
+    free( bin_offsets );
+    free( local_bininfo );
+    free( bin_count );
+    free( neighbor_bins );
     if( fsave )
         fclose( fsave );
     
