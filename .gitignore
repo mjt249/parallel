@@ -2,5 +2,10 @@ serial
 openmp
 mpi
 autograder
+penmp
 *.o
 *~
+.idea/
+cmake-build-debug/
+openmp_back.cpp
+CMakeLists.txt
