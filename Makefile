@@ -1,5 +1,5 @@
 #
-# Edison - NERSC 
+# Edison - NERSC
 #
 # Intel Compilers are loaded by default; for other compilers please check the module list
 #
@@ -16,6 +16,8 @@ all:	$(TARGETS)
 
 serial: serial.o common.o
 	$(CC) -o $@ $(LIBS) serial.o common.o
+barneshut: barneshut.o common.o
+	$(CC) -o $@ $(LIBS) barneshut.o common.o
 autograder: autograder.o common.o
 	$(CC) -o $@ $(LIBS) autograder.o common.o
 openmp: openmp.o common.o
@@ -29,6 +31,8 @@ openmp.o: openmp.cpp common.h
 	$(CC) -c $(OPENMP) $(CFLAGS) openmp.cpp
 serial.o: serial.cpp common.h
 	$(CC) -c $(CFLAGS) serial.cpp
+barneshut.o: barneshut.cpp common.h
+	$(CC) -c $(CFLAGS) barneshut.cpp
 mpi.o: mpi.cpp common.h
 	$(MPCC) -c $(CFLAGS) mpi.cpp
 common.o: common.cpp common.h
