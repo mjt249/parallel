@@ -3,6 +3,7 @@ openmp
 mpi
 autograder
 penmp
+barneshut
 *.o
 *~
 .idea/
