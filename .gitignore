@@ -10,3 +10,7 @@ barneshut
 cmake-build-debug/
 openmp_back.cpp
 CMakeLists.txt
+*.aux
+*.log
+*.pdf
+*.swp
