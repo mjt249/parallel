@@ -1,0 +1,19 @@
+#!/bin/bash -l
+#SBATCH -p regular 					# change this option for non-debug runs
+#SBATCH -t 00:20:00					# adjust the amount of time as necessary
+#SBATCH -A mp309
+#SBATCH -o auto-barneshut.%j.stdout
+#SBATCH -e auto-barneshut.%j.error
+#SBATCH -N 1						# you'll never need more than 1 node for the barneshut code
+
+rm barneshut.txt
+srun -n 1 -c 1 ./barneshut -n 500 -no -s barneshut.txt
+srun -n 1 -c 1 ./barneshut -n 1000 -no -s barneshut.txt
+srun -n 1 -c 1 ./barneshut -n 2000 -no -s barneshut.txt
+srun -n 1 -c 1 ./barneshut -n 4000 -no -s barneshut.txt
+srun -n 1 -c 1 ./barneshut -n 8000 -no -s barneshut.txt
+srun -n 1 -c 1 ./barneshut -n 10000 -no -s barneshut.txt
+srun -n 1 -c 1 ./barneshut -n 20000 -no -s barneshut.txt
+srun -n 1 -c 1 ./barneshut -n 40000 -no -s barneshut.txt
+srun -n 1 -c 1 ./barneshut -n 80000 -no -s barneshut.txt
+./autograder -v serial -s barneshut.txt
