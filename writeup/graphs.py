@@ -144,4 +144,3 @@ makegraph("Weak Scaling",
           "Number of particles",
           "Efficiency (serial time / parallel time)",
           ns2, ts2, ys2, plotloglog)
-
