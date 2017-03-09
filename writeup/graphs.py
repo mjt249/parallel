@@ -107,9 +107,9 @@ serialn, serialt, ns, ps, ts, labels = read_input_files(scalingfiles)
 # strong
 ps1 = [ps[i][:strongtrials] for i in range(len(ps) - 2)]
 ts1 = [ts[i][:strongtrials] for i in range(len(ts) - 2)]
-# exclude outliers from best fit curve
-ps1[1] = ps1[1][:-2]
-ts1[1] = ts1[1][:-2]
+# # exclude outliers from best fit curve
+# ps1[1] = ps1[1][:-2]
+# ts1[1] = ts1[1][:-2]
 ys1 = np.mean(serialt)/np.asarray(ps1[0], dtype=float)
 makegraph("Strong Scaling: 5000 Particles",
           "strong",
