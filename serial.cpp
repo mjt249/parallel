@@ -5,6 +5,8 @@
 #include "common.h"
 #include <iostream>
 
+#define K 1.0 // where n/K is the amount of space to allocate per bin
+
 //
 //  benchmarking program
 //
@@ -66,35 +68,15 @@ int main( int argc, char **argv )
         // Create Bins as a cell_num by cell_num matrix of Vectors
         int cell_num = 16;
         particle_t** bins[cell_num][cell_num];
-        int bin_sizes[cell_num][cell_num];
         int bindices[cell_num][cell_num];
-        // std::vector<particle_t*> bins[cell_num][cell_num];
         double cell_size = size / cell_num;
-        for (int i = 0; i < cell_num; i++)
-        {
-            for (int j = 0; j < cell_num; j++) {
-                bin_sizes[i][j] = 0;
-                bindices[i][j] = 0;
-            }
-        }
-
-        // initialize bin_sizes
-        for (int i = 0; i < n; i++)
-        {
-            double current_x = particles[i].x;
-            int bin_x = floor(current_x / cell_size);
-
-            double current_y = particles[i].y;
-            int bin_y = floor(current_y / cell_size);
-
-            bin_sizes[bin_x][bin_y] += 1;
-        }
 
         //initialize bins
         for (int i = 0; i < cell_num; i++)
         {
             for (int j = 0; j < cell_num; j++) {
-                bins[i][j] = (particle_t**) malloc( bin_sizes[i][j] * sizeof(particle_t));
+                bins[i][j] = (particle_t**) malloc( ceil(n/K) * sizeof(particle_t));
+                bindices[i][j] = 0;
             }
         }
 
@@ -106,11 +88,6 @@ int main( int argc, char **argv )
 
             double current_y = particles[i].y;
             int bin_y = floor(current_y / cell_size);
-            if (bin_sizes[bin_x][bin_y] < 1) {
-                printf("ERROR: Bin count mismatch\n");
-                exit(1);
-            }
-
             int bindex = bindices[bin_x][bin_y];
             bins[bin_x][bin_y][bindex] = &particles[i];
             bindices[bin_x][bin_y] += 1;
@@ -124,9 +101,8 @@ int main( int argc, char **argv )
             for (int current_col = 0; current_col < cell_num; current_col++)
             {
                 //Add current bin and neighboring bins to close_bins
-                // std::vector<std::vector<particle_t*> > close_bins;
                 particle_t** current_bin = bins[current_row][current_col];
-                for (int p = 0; p < bin_sizes[current_row][current_col]; p++ ) {
+                for (int p = 0; p < bindices[current_row][current_col]; p++ ) {
                     current_bin[p]->ax = current_bin[p]->ay = 0;
                     //Iterate through close_bins
                     for (int i = current_row - 1; i <= current_row + 1; i++) {
@@ -134,7 +110,7 @@ int main( int argc, char **argv )
                             if (i >= 0 && i < cell_num && j >= 0 && j < cell_num) {
                                 // this bin is a neighbor.
                                 // iterate through particles in this bin.
-                                for (int np = 0; np < bin_sizes[i][j]; np++){
+                                for (int np = 0; np < bindices[i][j]; np++){
                                 particle_t** current_neighbor = bins[i][j];
                                 apply_force( *current_bin[p],
                                         *current_neighbor[np], &dmin, &davg,
