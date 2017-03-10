@@ -42,6 +42,10 @@ int main( int argc, char **argv )
     //  simulate a number of time steps
     //
     double simulation_time = read_timer( );
+    double max_bin_size = ceil(n/K);
+    double density = .0005;
+    double size = sqrt( density * n );
+    int cell_num = (n < 5000 ? 16 : (n < 20000 ? 32 : 64));
 
     for( int step = 0; step < NSTEPS; step++ )
     {
@@ -62,11 +66,8 @@ int main( int argc, char **argv )
 
 
 
-        double density = .0005;
-        double size = sqrt( density * n );
 
         // Create Bins as a cell_num by cell_num matrix of Vectors
-        int cell_num = 16;
         particle_t** bins[cell_num][cell_num];
         int bindices[cell_num][cell_num];
         double cell_size = size / cell_num;
@@ -75,7 +76,7 @@ int main( int argc, char **argv )
         for (int i = 0; i < cell_num; i++)
         {
             for (int j = 0; j < cell_num; j++) {
-                bins[i][j] = (particle_t**) malloc( ceil(n/K) * sizeof(particle_t));
+                bins[i][j] = (particle_t**) malloc( max_bin_size * sizeof(particle_t));
                 bindices[i][j] = 0;
             }
         }

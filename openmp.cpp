@@ -35,6 +35,7 @@ int main(int argc, char **argv) {
     particle_t *particles = (particle_t *) malloc(n * sizeof(particle_t));
     set_size(n);
     init_particles(n, particles);
+    int cell_num = (n < 5000 ? 16 : (n < 20000 ? 36 : (n < 100000 ? 64: 128)));
 
     //
     //  simulate a number of time steps
@@ -51,7 +52,6 @@ int main(int argc, char **argv) {
             double size = sqrt(density * n);
 
             // Create Bins as a cell_num by cell_num matrix of Vectors
-            int cell_num = 16;
             std::vector<particle_t *> bins[cell_num][cell_num];
             for (int i = 0; i < cell_num; i++) {
                 for (int j = 0; j < cell_num; j++) {

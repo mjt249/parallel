@@ -6,7 +6,7 @@
 #include <vector>
 #include <array>
 #include <math.h>
-#define m 4  // number of bins in each direction
+#define m 8  // number of bins in each direction
 #define M m*m  // total number of bins to use
 
 //  auxilliary function for calculating a list of neighboring bins
