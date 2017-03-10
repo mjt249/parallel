@@ -40,7 +40,7 @@ int main( int argc, char **argv )
     double dmin, absmin=1.0,davg,absavg=0.0;
     double rdavg,rdmin;
     int rnavg;
-    
+
     //
     //  process command line parameters
     //
@@ -54,11 +54,11 @@ int main( int argc, char **argv )
         printf( "-no turns off all correctness checks and particle output\n");
         return 0;
     }
-    
+
     int n = read_int( argc, argv, "-n", 1000 );
     char *savename = read_string( argc, argv, "-o", NULL );
     char *sumname = read_string( argc, argv, "-s", NULL );
-    
+
     //
     //  set up MPI
     //
@@ -66,20 +66,20 @@ int main( int argc, char **argv )
     MPI_Init( &argc, &argv );
     MPI_Comm_size( MPI_COMM_WORLD, &n_proc );
     MPI_Comm_rank( MPI_COMM_WORLD, &rank );
-    
+
     //
     //  allocate generic resources
     //
     FILE *fsave = savename && rank == 0 ? fopen( savename, "w" ) : NULL;
     FILE *fsum = sumname && rank == 0 ? fopen ( sumname, "a" ) : NULL;
-    
-    
+
+
     particle_t *particles = (particle_t*) malloc( n * sizeof(particle_t) );
-    
+
     MPI_Datatype PARTICLE;
     MPI_Type_contiguous( 6, MPI_DOUBLE, &PARTICLE );
     MPI_Type_commit( &PARTICLE );
-    
+
     particle_t *particle_binned = (particle_t*) malloc( n * sizeof(particle_t) );
     int *bin_population = (int*) malloc( M * sizeof(int) );
     int *bin_offsets = (int*) malloc( M * sizeof(int) );
@@ -90,21 +90,21 @@ int main( int argc, char **argv )
     int *partition_offsets = (int*) malloc( (n_proc+1) * sizeof(int) );
     for( int i = 0; i < n_proc+1; i++ )
         partition_offsets[i] = min( i * particle_per_proc, n );
-    
+
     int *partition_sizes = (int*) malloc( n_proc * sizeof(int) );
     for( int i = 0; i < n_proc; i++ )
         partition_sizes[i] = partition_offsets[i+1] - partition_offsets[i];
-    
+
     //
     //  allocate storage for local partition
     //
     int nlocal = partition_sizes[rank];
     particle_t *local = (particle_t*) malloc( nlocal * sizeof(particle_t) );
     int* local_bininfo = (int*) malloc(nlocal * sizeof(int));
-    
+
     std::array<std::vector<particle_t>, M> bins;
     int *bin_count = (int*) malloc( M * sizeof(int) );
-    
+
     //
     //  initialize and distribute the particles (that's fine to leave it unoptimized)
     //
@@ -117,7 +117,7 @@ int main( int argc, char **argv )
     if( rank == 0 )
         init_particles( n, particles );
     MPI_Scatterv( particles, partition_sizes, partition_offsets, PARTICLE, local, nlocal, PARTICLE, 0, MPI_COMM_WORLD );
-    
+
     // auxilliary parameters
     particle_t* sendbuf;
     int* sendcounts = (int*) malloc( n_proc * sizeof(int) );
@@ -134,7 +134,7 @@ int main( int argc, char **argv )
     int* neighbor_bins = (int*) malloc( 8 * sizeof(int) );
     int n_neighbors, particle_id;
     int bin_x, bin_y, bin_id;
-    
+
     //
     //  simulate a number of time steps
     //
@@ -188,7 +188,7 @@ int main( int argc, char **argv )
         if( find_option( argc, argv, "-no" ) == -1 )
             if( fsave && (step%SAVEFREQ) == 0 )
                 save( fsave, n, particles );
-        
+
         // step 5, 6 & 7: par_update
         // par_update(local, particle_binned, int* bin_population, bin_offsets, &dmin, &davg, &navg);
         // loop through particles in local to update force
@@ -205,16 +205,16 @@ int main( int argc, char **argv )
                 }
             }
         }
-    
-        
+
+
         if( find_option( argc, argv, "-no" ) == -1 )
         {
-            
+
             MPI_Reduce(&davg,&rdavg,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
             MPI_Reduce(&navg,&rnavg,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
             MPI_Reduce(&dmin,&rdmin,1,MPI_DOUBLE,MPI_MIN,0,MPI_COMM_WORLD);
-            
-            
+
+
             if (rank == 0){
                 //
                 // Computing statistical data
@@ -237,10 +237,10 @@ int main( int argc, char **argv )
         MPI_Barrier(MPI_COMM_WORLD);
     }
     simulation_time = read_timer( ) - simulation_time;
-    
+
     if (rank == 0) {
         printf( "n = %d, simulation time = %g seconds", n, simulation_time);
-        
+
         if( find_option( argc, argv, "-no" ) == -1 )
         {
             if (nabsavg) absavg /= nabsavg;
@@ -256,14 +256,14 @@ int main( int argc, char **argv )
             if (absavg < 0.8) printf ("\nThe average distance is below 0.8 meaning that most particles are not interacting");
         }
         printf("\n");
-        
+
         //
         // Printing summary data
         //
         if( fsum)
             fprintf(fsum,"%d %d %g\n",n,n_proc,simulation_time);
     }
-    
+
     //
     //  release resources
     //
@@ -280,8 +280,8 @@ int main( int argc, char **argv )
     free( neighbor_bins );
     if( fsave )
         fclose( fsave );
-    
+
     MPI_Finalize( );
-    
+
     return 0;
 }
