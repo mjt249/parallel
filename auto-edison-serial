@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH -p debug 					# change this option for non-debug runs
+#SBATCH -p regular 					# change this option for non-debug runs
 #SBATCH -t 00:20:00					# adjust the amount of time as necessary
 #SBATCH -A mp309
 #SBATCH -o auto-serial.%j.stdout
@@ -17,4 +17,5 @@ srun -n 1 -c 1 ./serial -n 10000 -no -s serial.txt
 srun -n 1 -c 1 ./serial -n 20000 -no -s serial.txt
 srun -n 1 -c 1 ./serial -n 40000 -no -s serial.txt
 srun -n 1 -c 1 ./serial -n 80000 -no -s serial.txt
+srun -n 1 -c 1 ./serial -n 100000 -no -s serial.txt
 ./autograder -v serial -s serial.txt

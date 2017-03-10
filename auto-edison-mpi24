@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH -p debug 				# change this option for non-debug runs
+#SBATCH -p regular 				# change this option for non-debug runs
 #SBATCH -t 00:20:00				# adjust the amount of time as necessary
 #SBATCH -N 24					# adjust the number of nodes per test (e.g. start with 1, 2, ...)
 #SBATCH -A mp309
@@ -7,18 +7,30 @@
 #SBATCH -e auto-mpi24.%j.error
 
 rm mpi.txt
-srun -n 1 -N 1 ./serial -n 500 -no -s mpi.txt
-srun -n 1 -N 1 ./mpi -p 1 -n 500 -no -s mpi.txt
-srun -n 2 -N 2 ./mpi -p 2 -n 500 -no -s mpi.txt
-srun -n 4 -N 4 ./mpi -p 4 -n 500 -no -s mpi.txt
-srun -n 6 -N 6 ./mpi -p 6 -n 500 -no -s mpi.txt
-srun -n 12 -N 12 ./mpi -p 12 -n 500 -no -s mpi.txt
-srun -n 18 -N 18 ./mpi -p 18 -n 500 -no -s mpi.txt
-srun -n 24 -N 24 ./mpi -p 24 -n 500 -no -s mpi.txt
-srun -n 2 -N 2 ./mpi -p 2 -n 1000 -no -s mpi.txt
-srun -n 4 -N 4 ./mpi -p 4 -n 2000 -no -s mpi.txt
-srun -n 6 -N 6 ./mpi -p 6 -n 3000 -no -s mpi.txt
-srun -n 12 -N 12 ./mpi -p 12 -n 6000 -no -s mpi.txt
-srun -n 18 -N 18 ./mpi -p 18 -n 9000 -no -s mpi.txt
-srun -n 24 -N 24 ./mpi -p 24 -n 12000 -no -s mpi.txt
+srun -n 1 -N 1 ./mpi -p 1 -n 5000 -no -s mpi.txt
+srun -n 2 -N 2 ./mpi -p 2 -n 5000 -no -s mpi.txt
+srun -n 4 -N 4 ./mpi -p 4 -n 5000 -no -s mpi.txt
+srun -n 6 -N 6 ./mpi -p 6 -n 5000 -no -s mpi.txt
+srun -n 12 -N 12 ./mpi -p 12 -n 5000 -no -s mpi.txt
+srun -n 18 -N 18 ./mpi -p 18 -n 5000 -no -s mpi.txt
+srun -n 24 -N 24 ./mpi -p 24 -n 5000 -no -s mpi.txt
+srun -n 2 -N 2 ./mpi -p 2 -n 10000 -no -s mpi.txt
+srun -n 4 -N 4 ./mpi -p 4 -n 20000 -no -s mpi.txt
+srun -n 6 -N 6 ./mpi -p 6 -n 30000 -no -s mpi.txt
+srun -n 12 -N 12 ./mpi -p 12 -n 60000 -no -s mpi.txt
+srun -n 18 -N 18 ./mpi -p 18 -n 90000 -no -s mpi.txt
+srun -n 24 -N 24 ./mpi -p 24 -n 120000 -no -s mpi.txt
+srun -n 1 -N 1 ./mpi -p 1 -n 50000 -no -s mpi.txt
+srun -n 2 -N 2 ./mpi -p 2 -n 50000 -no -s mpi.txt
+srun -n 4 -N 4 ./mpi -p 4 -n 50000 -no -s mpi.txt
+srun -n 6 -N 6 ./mpi -p 6 -n 50000 -no -s mpi.txt
+srun -n 12 -N 12 ./mpi -p 12 -n 50000 -no -s mpi.txt
+srun -n 18 -N 18 ./mpi -p 18 -n 50000 -no -s mpi.txt
+srun -n 24 -N 24 ./mpi -p 24 -n 50000 -no -s mpi.txt
+srun -n 2 -N 2 ./mpi -p 2 -n 100000 -no -s mpi.txt
+srun -n 4 -N 4 ./mpi -p 4 -n 200000 -no -s mpi.txt
+srun -n 6 -N 6 ./mpi -p 6 -n 300000 -no -s mpi.txt
+srun -n 12 -N 12 ./mpi -p 12 -n 600000 -no -s mpi.txt
+srun -n 18 -N 18 ./mpi -p 18 -n 900000 -no -s mpi.txt
+srun -n 24 -N 24 ./mpi -p 24 -n 1200000 -no -s mpi.txt
 ./autograder -v mpi -s mpi.txt
