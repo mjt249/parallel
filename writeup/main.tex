@@ -11,7 +11,7 @@
 \usepackage{todonotes}
 
 \title{CS 267 Parallel Computing Homework 2\\
-\large{Part I (Serial \& OpenMP)}}
+\large{Parts I and II (Serial, OpenMP, and MPI)}}
 \author{Chiyu ``Max" Jiang, Eleanor Cawthon, Madeleine Traverse}
 \usepackage[utf8]{inputenc}
 \usepackage{color}
@@ -123,19 +123,12 @@ existing matrix instead of creating a new one, but since creating the matrix is
 only an $\mathcal{O}(n)$ operation, we did not think the improvement would be
 appreciable.
 
-To find the optimal number of bins for the simulation, we set the minimum size
-of the bin to the cutoff/100.  We then used a search to find the optimal bin
-size. As shown in Figure~\ref{fig:bin_time}, we found 16 bins to be optimal for
-reducing simulation time.
-
-\begin{figure}[ht]
-\centering
-\includegraphics[width=0.7\textwidth]{Picture1.png}
-\caption{Plot of number of bins vs. simulation time in the serial simulation.
-  This plot indicates that optimal performance is achieved when the number of
-  bins is set to 16.}
-\label{fig:bin_time}
-\end{figure}
+To find the optimal number of bins for the simulation, we ran the test script
+multiple times with different numbers of bins, using roughly a binary search to
+pick the tested bin counts. We found 16 bins to be optimal for $n < 5000$, while
+32 (for serial and OpenMP; 36 for MPI since our implementation requires the
+number of bins to be a square) was optimal for $5000 \le n < 20,000$. We found
+64 bins led to better performance than 81 or 128 for all $n > 20,000$ tested.
 
 \subsubsection{Complexity test}
 It is apparent from the small error margins with respect to the log-log linear
@@ -143,27 +136,19 @@ best fit lines in Figure~\ref{fig:serial} that both functions run in polynomial
 time, that is, $\mathcal{O}(n^k)$ for some constant $k$.  Interestingly,
 although Barnes-Hut's theoretical runtime is $\mathcal{O}(n\log n)$ rather than
 $\mathcal{O}(n)$, empirically for the values we tested, we found that Barnes-Hut
-conformed more closely to the idealized $\mathcal{O}(n)$ performance.
+conformed quite closely to the idealized $\mathcal{O}(n)$ performance.
 
-The autograder's calculation of the slope of the best fit curves differs
-slightly from that shown in Figure~\ref{fig:serial}: While our graph simply
-does a linear regression on the entire set of data, the autograder computes an
-average of piecewise slopes. This has the effect of reducing the impact of
-degraded performance with large numbers of particles, as the piecewise slope
-estimates indicate our binning code achieves much closer to $\mathcal{O}(n)$ at
-lower values of $n$, with slopes ranging from 0.598 to 2.381 for an average
-slope of 1.570 $\pm$ 0.892. While $\mathcal{O}(n^{1.570})$ is a significant
-improvement over the original $\mathcal{O}(n^2)$, it is also significantly
-slower than our hoped-for $\mathcal{O}(n)$. We believe this is due to
-inefficiences in our implementation (discussed further in
-Section~\ref{section:vtune}) rather than to a problem with our algorithm.
+The overall slope of the line of best fit is an
+average of piecewise slopes. Our binning code achieves much lower slopes at
+lower values of $n$, with slopes ranging from 0.407 to 1.372 for an average
+slope of 1.040 $\pm$ 0.593. Although there is a range, the
+overall performance of our serial code is thus very close to $\mathcal{O}(n)$.
 
-In contrast, although Barnes-Hut performs worse in absolute terms for most
-tested values of $n$, it scales much more consistently, with an overall slope of
-1.260 in our graph and 1.270 as computed by the autograder from a range of
-slopes varying just $\pm$ 0.07. This suggests that the low density of our
-simulation allows the $n$ term to dominate the $\log(n)$ term in the Barnes-Hut
-theoretical runtime --- in other words, our tree is shallow.
+In contrast, Barnes-Hut performs worse in absolute terms for most
+tested values of $n$. However, it scales more consistently, with a slope of
+1.270, with a range of slopes varying just $\pm$ 0.07. This suggests that the
+low density of our simulation allows the $n$ term to dominate the $\log(n)$ term
+in the Barnes-Hut theoretical runtime --- in other words, our tree is shallow.
 
 % It can be observed that with binning method, the overall average slope for
 % log-log plot is lower (1.1409), however the it shows an increasing trend in log
@@ -230,6 +215,11 @@ efficiency and compute efficiency.
 % \end{enumerate}
 
 \section{Performance Analysis}\label{section:vtune}
+In order to facilitate a rapid development cycle, we used VTune to test
+performance with small values of $n$ in order to aid in developing code that
+would scale. Specifically, all VTune testing was done with small enough $n$ to
+fit in 16 bins. This introduces the potential error of overstating the overhead
+of steps that do not scale with $n$.
 \subsection{Serial}
 The serial code used the binning method to allow for fewer particle comparisons.
 This was very successful. In the Naive code, \texttt{apply\_force} took 1.60e12.
@@ -238,19 +228,19 @@ improvement.
 
 According to the VTune report, the serial code was mostly Back-End bound, taking
 up around 31\% of the performance time. This can often be due to data-cache
-misses or stalls. Of the Back-End use, \~28\% was Core bound. This metric is
-sometimes due to dependencies in program data. Further analysis of the code
-breakdown pinpointed the slow down as an issue with the dynamically allocated
-vectors used in the matrix map. The performance problem with creating the
-vectors is primarily an issue due to the way C++ creates vectors. A small amount
-of space is malloced and then, whenever the vector exceeds that space, another
-larger space is malloced and everything in the first space must be copied into
-the second. Since this was happening multiple times for each time step, the
-performance was negatively affected. The choice of the pointer particles to be
-stored as vectors was made to allow the matrix to be edited each time-step
-instead of requiring it to be rebuilt. The time to build the matrix, however,
-was $\mathcal{O}(n)$ time, and is in fact probably mostly negligible, so a far
-better storage for the particles would be an array.
+misses or stalls. Of the Back-End use, approximately 28\% was Core bound. This
+metric is sometimes due to dependencies in program data. Further analysis of the
+code breakdown pinpointed the slow down as an issue with the dynamically
+allocated vectors used in the matrix map. The performance problem with creating
+the vectors is primarily an issue due to the way C++ creates vectors. A small
+amount of space is malloced and then, whenever the vector exceeds that space,
+another larger space is malloced and everything in the first space must be
+copied into the second. Since this was happening multiple times for each time
+step, the performance was negatively affected. The choice of the pointer
+particles to be stored as vectors was made to allow the matrix to be edited each
+time-step instead of requiring it to be rebuilt. The time to build the matrix,
+however, was $\mathcal{O}(n)$ time, and is in fact probably mostly negligible,
+so a far better storage for the particles would be an array.
 
 The serial code performance could also be improved by using a quadtree structure
 for the bins instead of a simple matrix. Even fewer \texttt{apply\_force}
@@ -262,23 +252,23 @@ different threads. In the Naive code for an n of size 12,000,
 3.24e8 clock ticks, a significant improvement.
 
 According to the VTune report, the code was heavily Back-End bound, taking up
-around 70\% of the time. Of the Back-End time, \~43\% was Memory Bound. When
-this metric is high, it can be due to stalls waiting for memory loads and
-stores. This was again discovered to be a consequence of using the dynamically
-allocated vectors and could be fixed by using arrays. Other improvements relate
-to improving the serial version of the code, as mentioned with the quad tree
-bins.
+around 70\% of the time. Of the Back-End time, approximately 43\% was Memory
+Bound. When this metric is high, it can be due to stalls waiting for memory
+loads and stores. This was again discovered to be a consequence of using the
+dynamically allocated vectors and could be fixed by using arrays. Other
+improvements relate to improving the serial version of the code, as mentioned
+with the quad tree bins.
 \subsection{MPI}
 The MPI code was designed to take advantage of the relatively low latency
 involved in communication between nodes. This allows for memory to be
 distributed, which can be important with very large data sets. Consequently, the
 largest performance cost is in this communication. According to the Craypat
 Profile, the \texttt{MPI\_Alltoallv} call takes up between 19-21\% of the
-sampling and performance time. The other three MPI calls combined take up \~10\%
-of the performance time. A solution to decrease the time spent on the
-\texttt{MPI\_Alltoallv} would be to require one processor to hold all of the
-data, instead of distributing it.  This “master” would then only send the
-required bins to each processor and they would not need to communicated with
+sampling and performance time. The other three MPI calls combined take up
+approximately 10\% of the performance time. A solution to decrease the time
+spent on the \texttt{MPI\_Alltoallv} would be to require one processor to hold
+all of the data, instead of distributing it.  This “master” would then only send
+the required bins to each processor and they would not need to communicated with
 each other. If the data is too large not to distribute it, a more complex model
 with multiple “masters” could be implemented where they communicate with each
 other to keep the data up-to-date.
@@ -288,23 +278,27 @@ present in the MPI implementation as well and could be fixed by switching the
 data structure to arrays.
 
 A strong benefit was seen again in the MPI code versus Naive due to the binning.
-Where the Naive code spent \~67\% of the performance time on
-\texttt{apply\_force}, our code spent only \~37\%, a major improvement. This is
-due to the fact that binning greatly cuts down on the number of times the
-function needs to be called. It could be reduced even further by implementing a
-quad-tree structure for the bins so that less particles need to be compared.
+Where the Naive code spent approximately 67\% of the performance time on
+\texttt{apply\_force}, our code spent only approximately 37\%, a major
+improvement. This is due to the fact that binning greatly cuts down on the
+number of times the function needs to be called. It could be reduced even
+further by implementing a quad-tree structure for the bins so that less
+particles need to be compared.
+
 \section{Results At Scale}\label{section:scale}
 Perhaps due to inherited inefficiencies in our serial code, we encountered
 difficulty in scaling to the target $n = 50,000$ particles per processor. We
 include data from the only tests that terminated at this scale: our serial
-codes, our OpenMP code with 50,000 particles per processor at one and two
-processors, and all strong scaling trials with our OpenMP code. Our MPI code at
-this scale did not terminate within the allotted time. Accordingly, we also
-tested with $n = 5,000$ for strong scaling and $n = 5,000 \times p$ for weak
-scaling to $p$ processors.
+codes, our OpenMP code with 50,000 particles per processor at up to 18
+processors, MPI with 50,000 particles on up to 12 processors,
+At larger values of $n$, our code did not terminate within the allotted time.
+Accordingly, we also tested with $n = 5,000$ for strong scaling and $n = 5,000
+\times p$ for weak scaling to $p$ processors, so that we would have more data to
+compare.
+
 \subsection{Serial vs. OpenMP vs. MPI: Weak Scaling}
 In Figure~\ref{fig:weak}, we compare the execution time of each parallel run to
-the execution time for our binning code to run a given number of
+the execution time for our serial binning code to run a given number of
 particles-per-processor on a single processor. Steeper (more negative) slopes
 correspond to more degraded performance with increased $n$, and therefore worse
 scalability. The y-axis shows a scalar between 0 and 1, where 1 would represent
@@ -321,21 +315,42 @@ Figure~\ref{fig:serial}, but negative.\footnote{The numbers are slightly
   Figure~\ref{fig:weak}, whereas Figure~\ref{fig:serial} includes results
 with smaller $n$, on which our binning algorithm performs better.}
 
-At similar scale ($4000 < n < 120000$), both OpenMP and MPI exhibit similar
-scalability, with slopes very close to $-1$. This means that for both
-parallel implementations, each time the number of processors is
-doubled, the extent of the speedup is halved. Our limited results for $n=50,000$
-show that at least for for OpenMP, the amount of overhead per particle
-per processor continues to increase as the problem size grows. The best fit line
-for MPI fits the data more closely, suggesting more consistent overhead in that
-implementation. However, the absolute performance of MPI is substantially worse
-than that of OpenMP.
+At similar scale ($4000 < n < 120000$), OpenMP exhibits better scalability (less
+negative slope) and better absolute performance (higher efficiency scores) than
+our MPI implementation. For our MPI implementation, with a slope of
+approximately -1, each time the number of processors is doubled, the extent of
+the speedup is halved. In the smaller range of $n$ values, our OpenMP code
+degrades by only 38\%. The best fit line for MPI fits the data more
+closely, suggesting more consistent overhead in that implementation. However,
+the absolute performance of MPI is substantially worse than that of OpenMP.
+
+For values of $n$ below 90,000, the slope of our OpenMP curve is much gentler,
+with performance significantly degraded in the jump from 60,000 particles on
+12 processors to 90,000 on 18. This is the first value of $n$ where we use 64
+bins instead of 32. We also tested with 32 and 36 bins at these $n$-values, but
+the performance was significantly worse. It is possible that there is a better
+number of bins between 36 and 64, but the degraded performance with higher $n$
+continues to be apparent for the 50,000 per processor curve, and so this may
+simply be an example of limited scalability.
+
+Our limited results for $n=50,000$ show that at least for for OpenMP, the amount
+of overhead per particle per processor continues to increase as the problem size
+grows. Similar to our results for $90,000$, we see a significant dropoff at $n =
+600,000$. We again experimented with larger numbers of bins, but again this did
+not improve performance.
 
 We note that the performance of OpenMP with one thread is almost identical to
-the performance of our serial code. This speaks to the usability of OpenMP as a
-library --- it was relatively easy to write code that, without modification,
-reduces to the serial runtime without incurring overhead from the
-additional code required for OpenMP.
+the performance of our serial code, even at $n = 50,000$. This speaks to the
+usability of OpenMP as a library --- it was relatively easy to write code that,
+without modification, reduces to the serial runtime without incurring overhead
+from the additional code required for OpenMP. In contrast, our MPI code on a
+single processor performs significantly worse than our serial code even at $n =
+5,000$.
+
+At $n = 50,000$ on one processor, the MPI performance appears to be
+better than the performance predicted by the best fit line for $50,000$ spread
+across 10 processors. This further indicates room for improvement in our scaling
+in our MPI code.
 \begin{figure}[ht!]
 \centering
 \includegraphics[width=0.9\textwidth]{weak.png}
@@ -353,13 +368,23 @@ runtime of time $T/p$, where $T$ is the runtime on a single processor.
 
 In our OpenMP code with $n=5000$, the overhead of adding processors obviates the
 performance gains at $p > 12$. The data is very close to linear (in log-log
-scale) for $p \le 12$. For larger problems, however, our OpenMP code continues
-to scale well for all $p$ tested, as demonstrated by the series with $n=50,000$.
+scale) for $p \le 12$. For larger problems, our OpenMP code continues
+to scale well for all $p$ through 12, after which there is a similar dropoff. We
+note that this trend is also present in our weak scaling results, especially for
+5,000 particles per processor. Since Edison has 12 cores per CPU, this is the
+point at which work begins being shared across both CPUs-per-node, and our
+results indicate that this incurs significant overhead particularly in the
+shared memory design of OpenMP. We were unable to test the MPI code with more
+than 12 nodes because of compute constraints, but we hypothesize that MPI would
+not exhibit this particular dropoff.
 
 As with weak scaling, the absolute performance of our OpenMP code is
 significantly better than that of our MPI code for equivalent problems. We
 attribute this to the increased complexity of debugging and profiling
-distributed memory as compared with shared memory.
+distributed memory as compared with shared memory. We note however that the
+results for MPI with 50,000 particles come the closest to the idealized slope of
+$-1.0$, with a slope of $-0.96$ and low error, suggesting the slowness of our
+MPI code only increases linearly with scale instead of super-linearly.
 \begin{figure}[ht!]
 \centering
 \includegraphics[width=0.9\textwidth]{strong.png}
@@ -383,6 +408,14 @@ code with 5000 particles.}\label{fig:strong}
 %   values of $n$. $x$ axis shows particle density and $y$ axis shows running
 % time.}\label{fig:smol}
 % \end{figure}
+\section{Conclusion}
+By using a binning method, we achieved serial performance very close to
+$\mathcal{O}(n)$. When we parallelized this algorithm, we achieved better
+scalability overall with our shared memory implementation using OpenMP, but we
+encountered degraded performance when using more than 12 processes (the number
+of cores per CPU on Edison). Our distributed memory code using MPI exhibited
+worse overall performance but more consistent scalability for very large numbers
+of particles.
 \clearpage
 \bibliography{main.bib}
 \bibliographystyle{unsrt}

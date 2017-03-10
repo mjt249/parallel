@@ -7,33 +7,34 @@ from copy import deepcopy
 datadir = "../data/"
 complexityfiles = [(datadir+"serial.txt", "Serial Binning"),
               (datadir+"barneshut.txt", "Barnes-Hut")]
-scalingfiles = [(datadir+"openmp.txt", "OpenMP - 50000 particles"),
+scalingfiles = [
+                (datadir+"openmp.txt", "OpenMP - 50000 particles"),
                 (datadir+"openmp5000.txt", "OpenMP - 5000 particles"),
-                (datadir+"mpi.txt", "MPI"),
-                (datadir+"serial.txt", "Binning"),
-                (datadir+"barneshut.txt", "Barnes-Hut")]
+                (datadir+"mpi.txt", "MPI - 50000 particles"),
+                (datadir+"mpi5000.txt", "MPI - 5000 particles"),
+                (datadir+"serial.txt", "Serial Binning"),
+                (datadir+"barneshut.txt", "Serial Barnes-Hut")]
 strongtrials = 7
 
 # Add a loglog plot and best fit line of xs[i],ys[i] for i in len(xs)
 def plotloglog(ax, xs, ys, ideals):
-    colors = "gbmkc"
-    shapes = "^voxs"
+    colors = "gbmkcy"
+    shapes = "^voxsd"
+    regression = True
     for i in range(len(xs)):
         xs[i] = np.asarray(xs[i], dtype=float)
         ys[i] = np.asarray(ys[i], dtype=float)
-        # print i
-        print xs[i]
-        print np.asarray(xs[i])
         logx = np.log10(xs[i])
         logy = np.log10(ys[i])
-        print xs[i], ys[i]
-        [slope,const] = np.polyfit(logx, logy, 1)
-        const = np.power(10,const)
         ax.plot(xs[i], ys[i], colors[i]+shapes[i], label=labels[i])
-        ax.plot(xs[i], const * (xs[i] ** slope), colors[i]+"-",
-                label="slope = "+str(slope))
-    ax.plot(xs[-1], ideals, "r-", label="Ideal performance, slope = "+
-            str(np.polyfit(np.log10(xs[-1]), np.log10(ideals), 1)[0]))
+        regression = (xs[i][0] != xs[i][-1])
+        if regression:
+            [slope,const] = np.polyfit(logx, logy, 1)
+            const = np.power(10,const)
+            ax.plot(xs[i], const * (xs[i] ** slope), colors[i]+"-",
+                    label="slope = "+str(slope))
+    ax.plot(xs[0], ideals, "r-", label="Ideal performance, slope = "+
+            str(np.polyfit(np.log10(xs[0]), np.log10(ideals), 1)[0]))
 
 def makegraph(title, outfile, base, xlabel, ylabel, xs, ys, idealys, plotfunc):
     fig, ax = plt.subplots()
@@ -78,6 +79,7 @@ def read_input_files(list_of_files):
                 p = [line.split()[1] for line in lines[starti:]]
                 t = [line.split()[2] for line in lines[starti:]]
 
+            print "n for", label, ":",n
             ns.append(n)
             ps.append(p)
             ts.append(t)
@@ -101,7 +103,7 @@ makegraph("Serial Performance", 'serial',
           # (ns[-1]/250)[:7],
           ns,
           ts,
-          [float(i)/250 for i in ns[-1]],
+          [float(i)/1500 for i in ns[0]],
           plotloglog)
 serialn, serialt, ns, ps, ts, labels = read_input_files(scalingfiles)
 # strong
@@ -129,15 +131,8 @@ ts2 = [serialt[i]/np.asarray(prepend(ts[i][0],ts[i][strongtrials:]),
                   range(len(ts)-2)]
 ts2.append(serialt[i]/np.asarray(ts[-2], dtype=float)[4:])
 ts2.append(serialt[i]/np.asarray(ts[-1], dtype=float)[3:])
-ys2 = np.asarray([1.0]*len(ps2[-1]))
-print "FACE"
-print ns
-print ps
-print ts
-print "WEAK"
-print "ns2", ns2
-print "ps2", ps2
-print "ts2", ts2
+ys2 = np.asarray([1.0]*len(ns2[0]))
+print "ns2[0]",ns2[0],"ys2",ys2
 makegraph("Weak Scaling",
           "weak",
           2,

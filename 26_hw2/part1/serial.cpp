@@ -3,14 +3,15 @@
 #include <assert.h>
 #include <math.h>
 #include "common.h"
-#include <vector>
 #include <iostream>
+
+#define K 1.0 // where n/K is the amount of space to allocate per bin
 
 //
 //  benchmarking program
 //
 int main( int argc, char **argv )
-{    
+{
     int navg,nabsavg=0;
     double davg,dmin, absmin=1.0, absavg=0.0;
 
@@ -24,24 +25,28 @@ int main( int argc, char **argv )
         printf( "-no turns off all correctness checks and particle output\n");
         return 0;
     }
-    
+
     int n = read_int( argc, argv, "-n", 1000 );
 
     char *savename = read_string( argc, argv, "-o", NULL );
     char *sumname = read_string( argc, argv, "-s", NULL );
-    
+
     FILE *fsave = savename ? fopen( savename, "w" ) : NULL;
     FILE *fsum = sumname ? fopen ( sumname, "a" ) : NULL;
 
     particle_t *particles = (particle_t*) malloc( n * sizeof(particle_t) );
     set_size( n );
     init_particles( n, particles );
-    
+
     //
     //  simulate a number of time steps
     //
     double simulation_time = read_timer( );
-	
+    double max_bin_size = ceil(n/K);
+    double density = .0005;
+    double size = sqrt( density * n );
+    int cell_num = (n < 5000 ? 16 : (n < 20000 ? 32 : 64));
+
     for( int step = 0; step < NSTEPS; step++ )
     {
 	navg = 0;
@@ -61,21 +66,22 @@ int main( int argc, char **argv )
 
 
 
-        double density = .0005;
-        double size = sqrt( density * n );
 
         // Create Bins as a cell_num by cell_num matrix of Vectors
-        int cell_num = 16;
-        std::vector<particle_t*> bins[cell_num][cell_num];
+        particle_t** bins[cell_num][cell_num];
+        int bindices[cell_num][cell_num];
+        double cell_size = size / cell_num;
+
+        //initialize bins
         for (int i = 0; i < cell_num; i++)
         {
             for (int j = 0; j < cell_num; j++) {
-                bins[i][j] = std::vector<particle_t*>();
+                bins[i][j] = (particle_t**) malloc( max_bin_size * sizeof(particle_t));
+                bindices[i][j] = 0;
             }
         }
-        double cell_size = size / cell_num;
 
-        // Fill matrix with particles
+        // Fill bins matrix with particles
         for (int i = 0; i < n; i++)
         {
             double current_x = particles[i].x;
@@ -83,8 +89,9 @@ int main( int argc, char **argv )
 
             double current_y = particles[i].y;
             int bin_y = floor(current_y / cell_size);
-
-            bins[bin_y][bin_x].push_back(&particles[i]);
+            int bindex = bindices[bin_x][bin_y];
+            bins[bin_x][bin_y][bindex] = &particles[i];
+            bindices[bin_x][bin_y] += 1;
         }
 
         // Compute forces
@@ -95,32 +102,22 @@ int main( int argc, char **argv )
             for (int current_col = 0; current_col < cell_num; current_col++)
             {
                 //Add current bin and neighboring bins to close_bins
-                std::vector<std::vector<particle_t*> > close_bins;
-
-                //Add neighbors
-                for (int i = current_row - 1; i <= current_row + 1; i++) {
-                    for (int j = current_col - 1; j <= current_col + 1; j++) {
-                        if (i >= 0 && i < cell_num && j >= 0 && j < cell_num) {
-                            close_bins.push_back(bins[i][j]);
-                        }
-                    }
-                }
-
-                //Find forces for each particle in bins[current_row][current_col]
-                std::vector<particle_t*> current_bin = bins[current_row][current_col];
-                //std::cout << "bin size: " << current_bin.size() << std::endl;
-
-                for (int p = 0; p < current_bin.size(); p++ ) {
+                particle_t** current_bin = bins[current_row][current_col];
+                for (int p = 0; p < bindices[current_row][current_col]; p++ ) {
                     current_bin[p]->ax = current_bin[p]->ay = 0;
-
-
                     //Iterate through close_bins
-                    for (int neighbor_index = 0; neighbor_index < close_bins.size(); neighbor_index ++){
-                        std::vector<particle_t*> current_neighbor = close_bins[neighbor_index];
-
-                        //Iterate through close particles
-                        for (int np = 0; np < current_neighbor.size(); np++){
-                            apply_force( *current_bin[p], *current_neighbor[np], &dmin, &davg, &navg);
+                    for (int i = current_row - 1; i <= current_row + 1; i++) {
+                        for (int j = current_col - 1; j <= current_col + 1; j++) {
+                            if (i >= 0 && i < cell_num && j >= 0 && j < cell_num) {
+                                // this bin is a neighbor.
+                                // iterate through particles in this bin.
+                                for (int np = 0; np < bindices[i][j]; np++){
+                                particle_t** current_neighbor = bins[i][j];
+                                apply_force( *current_bin[p],
+                                        *current_neighbor[np], &dmin, &davg,
+                                        &navg);
+                                }
+                            }
                         }
                     }
                 }
@@ -151,7 +148,7 @@ int main( int argc, char **argv )
             nabsavg++;
           }
           if (dmin < absmin) absmin = dmin;
-		
+
           //
           //  save if necessary
           //
@@ -160,13 +157,13 @@ int main( int argc, char **argv )
         }
     }
     simulation_time = read_timer( ) - simulation_time;
-    
+
     printf( "n = %d, simulation time = %g seconds", n, simulation_time);
 
     if( find_option( argc, argv, "-no" ) == -1 )
     {
       if (nabsavg) absavg /= nabsavg;
-    // 
+    //
     //  -The minimum distance absmin between 2 particles during the run of the simulation
     //  -A Correct simulation will have particles stay at greater than 0.4 (of cutoff) with typical values between .7-.8
     //  -A simulation where particles don't interact correctly will be less than 0.4 (of cutoff) with typical values between .01-.05
@@ -177,22 +174,22 @@ int main( int argc, char **argv )
     if (absmin < 0.4) printf ("\nThe minimum distance is below 0.4 meaning that some particle is not interacting");
     if (absavg < 0.8) printf ("\nThe average distance is below 0.8 meaning that most particles are not interacting");
     }
-    printf("\n");     
+    printf("\n");
 
     //
     // Printing summary data
     //
-    if( fsum) 
+    if( fsum)
         fprintf(fsum,"%d %g\n",n,simulation_time);
- 
+
     //
     // Clearing space
     //
     if( fsum )
-        fclose( fsum );    
+        fclose( fsum );
     free( particles );
     if( fsave )
         fclose( fsave );
-    
+
     return 0;
 }
